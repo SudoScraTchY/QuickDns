@@ -1,30 +1,30 @@
-﻿using System.Linq.Expressions;
 using QD.Core.Cotracts.DnsObjContracts;
 
 namespace QD.Core.Domain.DnsObj;
 
+/// <summary>
+/// Storage contract for DNS presets. Implementations: SQLite (Microsoft.Data.Sqlite)
+/// in the product, in-memory fake in tests.
+/// </summary>
 public interface IDnsObjRepository
 {
-    Task<bool> CreateAsync(DnsObj entity);
-    Task<bool> UpdateAsync(DnsObj entity);
-    Task<List<DnsObjViewModel>> GetAllAsync();
-    Task<bool> DeleteAsync(int id);
-    Task<DnsObj> FindByAsync(int id);
-    Task<DnsObjViewModel> FindByAsync(string dns);
-    Task<EditDnsObj> GetDetailAsync(int id);
-    Task<bool> ExistsAsync(Expression<Func<DnsObj, bool>> expression);
-    Task<DnsObjViewModel> FindByAsync(Expression<Func<DnsObj, bool>> expression);
-    Task<bool> IsDuplicateDnsAsync(string name ,string firstDns, string secondDns);
-    
-    
-    bool Create(DnsObj entity);
-    bool Update(DnsObj entity);
-    List<DnsObjViewModel> GetAll();
+    int Count();
+
+    /// <summary>All presets, newest (highest id) first.</summary>
+    IReadOnlyList<DnsObjViewModel> GetAll();
+
+    DnsObjViewModel? FindById(int id);
+
+    /// <summary>Inserts a preset and returns the stored view of it.</summary>
+    DnsObjViewModel Create(string name, string primaryDns, string secondaryDns);
+
+    bool Update(int id, string name, string primaryDns, string secondaryDns);
+
     bool Delete(int id);
-    DnsObj FindBy(int id);
-    DnsObjViewModel FindBy(string dns);
-    EditDnsObj GetDetail(int id);
-    bool Exists(Expression<Func<DnsObj, bool>> expression);
-    DnsObjViewModel FindBy(Expression<Func<DnsObj, bool>> expression);
-    bool IsDuplicateDns(string name ,string firstDns, string secondDns);
+
+    /// <summary>True when another preset (case-insensitive) already uses this name.</summary>
+    bool NameExists(string name, int excludeId = 0);
+
+    /// <summary>True when another preset already uses this server pair (either order).</summary>
+    bool ServersExist(string primaryDns, string secondaryDns);
 }

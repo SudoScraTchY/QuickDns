@@ -1,10 +1,10 @@
-﻿namespace QD.Core.Cotracts.DnsObjContracts;
+namespace QD.Core.Cotracts.DnsObjContracts;
 
 public class CreateDnsObj
 {
-    public string FirstDns { get; set; }
-    public string SecondDns { get; set; }
-    public string Name { get; set; }
+    public string FirstDns { get; set; } = string.Empty;
+    public string SecondDns { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
 
     public CreateDnsObj()
     {

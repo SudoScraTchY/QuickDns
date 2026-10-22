@@ -8,7 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  test:
+    name: Test
     runs-on: windows-latest
 
     steps:
@@ -16,49 +17,71 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Setup .NET
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '9.0.x'
 
-    - name: Restore dependencies
-      run: dotnet restore QuickDNS.sln
+    - name: Run tests
+      run: dotnet test QuickDNS.sln -c Release --nologo
 
-    # Self-contained single file
-    - name: Publish self-contained
-      run: dotnet publish QuickDnsConsole/QuickDNSConsole.csproj `
-             -c Release -r win-x64 --self-contained true `
-             -p:PublishSingleFile=true `
-             -p:DebugType=none -p:DebugSymbols=false `
-             -p:IncludeNativeLibrariesForSelfExtract=true `
-             -o publish/self-contained
+  publish:
+    name: Publish ${{ matrix.rid }}
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            artifact: QuickDNS-win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+            artifact: QuickDNS-linux-x64
+    runs-on: ${{ matrix.os }}
 
-    # Framework-dependent
-    - name: Publish framework-dependent
-      run: dotnet publish QuickDnsConsole/QuickDNSConsole.csproj `
-             -c Release -r win-x64 --self-contained false `
-             -p:PublishSingleFile=true `
-             -p:DebugType=none -p:DebugSymbols=false `
-             -p:IncludeNativeLibrariesForSelfExtract=false `
-             -o publish/framework
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
 
-    # Rename + Zip
-    - name: Package Artifacts
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+
+    # Self-contained, trimmed, ReadyToRun single-file executable.
+    - name: Publish
+      run: >
+        dotnet publish QuickDnsConsole/QuickDnsConsole.csproj
+        -c Release -r ${{ matrix.rid }} --self-contained true
+        -p:PublishSingleFile=true
+        -p:PublishReadyToRun=true
+        -p:PublishTrimmed=true
+        -p:IncludeNativeLibrariesForSelfExtract=true
+        -p:DebugType=none -p:DebugSymbols=false
+        -o publish/${{ matrix.rid }}
+
+    - name: Package
+      shell: bash
       run: |
-        cd publish/self-contained
-        ren QuickDnsConsole.exe QuickDNS-selfcontained.exe
-        7z a ../QuickDNS-selfcontained.zip QuickDNS-selfcontained.exe
-        cd ../framework
-        ren QuickDnsConsole.exe QuickDNS-framework.exe
-        7z a ../QuickDNS-framework.zip QuickDNS-framework.exe
+        cd publish/${{ matrix.rid }}
+        if [ -f QuickDNSConsole.exe ]; then mv QuickDNSConsole.exe QuickDNS.exe; fi
+        if [ -f QuickDNSConsole ]; then mv QuickDNSConsole QuickDNS; fi
+        7z a ../${{ matrix.artifact }}.zip .
 
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact }}
+        path: publish/${{ matrix.artifact }}.zip
+
+    # action-gh-release defaults to the workflow's own GITHUB_TOKEN, so no
+    # explicit token mapping is needed here.
     - name: Create/Update Release (Latest)
-      uses: softprops/action-gh-release@v1
+      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
         name: "QuickDNS Latest Build"
         files: |
-          publish/QuickDNS-selfcontained.zip
-          publish/QuickDNS-framework.zip
+          publish/QuickDNS-win-x64.zip
+          publish/QuickDNS-linux-x64.zip
         fail_on_unmatched_files: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

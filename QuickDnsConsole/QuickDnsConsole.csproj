@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -12,21 +12,22 @@
         <LangVersion>13</LangVersion>
         <AssemblyName>QuickDNSConsole</AssemblyName>
         <RootNamespace>QuickDNSConsole</RootNamespace>
+        <Version>2.1.0</Version>
+        <!-- Trims ICU and avoids globalization startup cost; the app formats
+             fixed-pattern strings only. -->
+        <InvariantGlobalization>true</InvariantGlobalization>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.9">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
-        <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
-        <PackageReference Include="Spectre.Console" Version="0.51.2-preview.0.3" />
-        <PackageReference Include="Spectre.Console.Cli" Version="0.51.2-preview.0.3" />
-        <PackageReference Include="System.Management" Version="9.0.9" />
+        <PackageReference Include="Spectre.Console" Version="0.50.0" />
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\QD.Core\QD.Core.csproj" />
+        <InternalsVisibleTo Include="QD.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\QD.Core\QD.Core.csproj" />
     </ItemGroup>
 
 </Project>
