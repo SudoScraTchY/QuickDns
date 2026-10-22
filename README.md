@@ -1,9 +1,12 @@
 # QuickDNS
 
-**Fast, keyboard-first DNS switcher for Windows and Linux** — a single, self-contained console app that applies saved DNS presets to the network adapter you choose, in milliseconds.
+**A fast, keyboard-first DNS switcher for Windows and Linux.**
+Pick a saved DNS preset, pick an adapter, press Enter — done. One self-contained executable, no installer, no runtime dependencies.
+
+[![Build QuickDns](https://github.com/SudoScraTchY/QuickDns/actions/workflows/main.yml/badge.svg)](https://github.com/SudoScraTchY/QuickDns/actions/workflows/main.yml)
 
 ```
-╭─ QuickDNS v2.0.0 ───────────────────────────────────────────────────────────╮
+╭─ QuickDNS v2.1.0 ──────────────────────────────────────────────────────────╮
 │ Adapter  Ethernet · Realtek PCIe GbE Family Controller · ● Up              │
 │ IP       192.168.1.4                                                       │
 │ DNS      1.1.1.1 | 1.0.0.1  Cloudflare                                     │
@@ -11,93 +14,92 @@
 ╭─ DNS Presets ───────────────╮ ╭─ Target adapter ───────────────────────────╮
 │   ● Cloudflare  1.1.1.1…    │ │ Type       Ethernet                        │
 │ ❯   Google      8.8.8.8…    │ │ Status     Up                              │
-│     Quad9       9.9.9.9…    │ │ Interface  12                              │
-│     OpenDNS     208.67…     │ │ Addresses  192.168.1.4                     │
-│     AdGuard     94.140…     │ │ Gateway    192.168.1.1                     │
-╰─────────────────────────────╯ │ Backend    WMI (…SetDNSServerSearchOrder)  │
-                                 ╰────────────────────────────────────────────╯
- ready in 31 ms · elevated: yes
- ↑↓ select   Home/End jump   ↵ apply   A adapter   C new   E edit   D delete   U unset   R refresh   Q quit
+│     Quad9       9.9.9.9…    │ │ Gateway    192.168.1.1                     │
+│     OpenDNS     208.67…     │ │ DNS        1.1.1.1, 1.0.0.1                │
+│     AdGuard     94.140…     │ │ Backend    WMI (…SetDNSServerSearchOrder)  │
+╰─────────────────────────────╯ ╰────────────────────────────────────────────╯
+ done: applied 'Google' → 8.8.8.8 | 8.8.4.4
+ ↑↓ select  ↵ apply  A adapter  C new  E edit  D delete  U unset  X export  I import  R refresh  Q quit
 ```
 
-## Highlights
+## Features
 
-- **Fast boot by design** — no artificial delays, no generic host, no WMI enumeration at startup. The dashboard is ready in tens of milliseconds; everything platform-specific is lazy and created on first use.
-- **Per-adapter DNS** — every Ethernet / Wi-Fi adapter is listed with status, IPs and current DNS; pick a target explicitly or let *Auto* choose the adapter that is up with an IPv4 gateway. Your choice persists in `settings.json`.
-- **Cross-platform** — Windows (WMI `Win32_NetworkAdapterConfiguration`) and Linux (NetworkManager `nmcli` → `systemd-resolved` `resolvectl` → `/etc/resolv.conf` fallback, auto-detected).
-- **Real TUI** — one flicker-free live dashboard (Spectre.Console), section panels, active-preset marker, persisted activity history, inline success/error feedback, validation on every input, Esc cancels anywhere.
-- **Safe changes** — deletions ask for confirmation; applying without elevation is detected up front and reported clearly instead of failing with a raw WMI error.
-- **First-run friendly** — popular presets (Cloudflare, Google, Quad9, OpenDNS, AdGuard) are seeded automatically.
+- **Instant switching** — apply, edit, delete and unset (back to DHCP) DNS presets from a live dashboard; the active preset is marked with ●
+- **Adapter targeting** — any Ethernet/Wi-Fi adapter can be the target; pick one explicitly (persisted) or let *Auto* choose the adapter that is up with an IPv4 gateway
+- **Cross-platform** — Windows via WMI; Linux via NetworkManager (`nmcli`, persistent), `systemd-resolved` (`resolvectl`), or `/etc/resolv.conf` fallback — auto-detected
+- **Fast boot** — ready in tens of milliseconds; trimmed, ReadyToRun, self-contained single file
+- **Update-proof data** — presets live in your user profile, an auto-backup is refreshed on every clean start, and a corrupted store self-heals from it
+- **Portable presets** — export/import to versioned JSON (`X`/`I` keys or CLI), de-duplicated and validated on import
+- **First-run friendly** — ships with Cloudflare, Google, Quad9, OpenDNS and AdGuard presets
+- **Honest feedback** — IP validation on input, confirm-before-delete, elevation warnings, inline success/error messages, `crash.log` when anything fails
 
-## Requirements
+## Download
 
-| | |
+Grab the latest build from the **[latest release](https://github.com/SudoScraTchY/QuickDns/releases/tag/latest)** (or the workflow artifacts):
+
+| File | For |
 |---|---|
-| Windows | Windows 10/11, **Run as administrator** to change DNS |
-| Linux | Any distro with .NET 9 runtime; root/sudo for DNS changes. Persistent changes need NetworkManager (`nmcli`); otherwise `resolvectl` (runtime-only) or a writable `/etc/resolv.conf` |
+| `QuickDNS-win-x64.zip` | Windows 10/11 |
+| `QuickDNS-linux-x64.zip` | Linux x64 |
 
-## Troubleshooting: "the app won't open at all"
-
-**Run the self-contained build.** If you launch a *framework-dependent* build (e.g. `bin\Debug\net9.0\QuickDNSConsole.exe`) and the machine has a stale `DOTNET_ROOT` environment variable pointing at an older .NET runtime, the exe aborts instantly with "You must install or update .NET to run this application" — before any QuickDNS code runs. This is a launcher-level failure:
-
-- Self-contained single-file builds (CI artifacts, `publish/` output) are immune — they carry their own runtime. Use those.
-- If the window flash-closes for any other reason, check `%APPDATA%\QuickDns\crash.log` (Linux: `~/.config/QuickDns/crash.log`) — every startup failure writes the full stack there, and an interactive run stays open with "Press any key to close…" so the error is readable.
-- `QuickDNS --diagnostics` is a safe, non-interactive way to verify platform, elevation, DNS backend and preset store health.
+Both are **self-contained** single-file executables — no .NET installation needed. Unzip and run; that's the install.
 
 ## Usage
 
-Launch the app and use the keybar:
+```bash
+QuickDNS                          # launch the interactive dashboard
+QuickDNS --diagnostics            # platform, elevation, DNS backend, adapters, store — read-only
+QuickDNS --export [path]          # all presets → portable JSON (default: new file in the config dir)
+QuickDNS --import <path>          # import presets; duplicates (name or server pair) are skipped
+QuickDNS --version | --help
+```
+
+Dashboard keys:
 
 | Key | Action |
 |---|---|
-| `↑` `↓` / `Home` `End` / `PgUp` `PgDn` | Move selection |
+| `↑` `↓` · `Home` `End` · `PgUp` `PgDn` | Move selection |
 | `Enter` | Apply the selected preset to the target adapter |
 | `A` | Choose target adapter (or Auto) |
 | `C` / `E` / `D` | Create / edit / delete preset (`Y` confirms delete) |
 | `U` | Clear DNS — back to automatic (DHCP) |
-| `X` / `I` | Export presets to a JSON file / import from one | 
+| `X` / `I` | Export presets to JSON / import from an export file |
 | `R` / `F5` | Refresh adapter + DNS state |
 | `Q` / `Esc` | Quit |
 
-Command-line:
+**Changing DNS requires elevation** — start the terminal *as administrator* on Windows, or run with `sudo` on Linux. Without it, QuickDNS tells you up front instead of failing with a raw system error.
 
-```bash
-QuickDNS --diagnostics          # platform, elevation, DNS backend, adapters, store — no changes made
-QuickDNS --export               # all presets → a new QuickDNS-presets-<stamp>.json in the config dir
-QuickDNS --export C:\backup.json
-QuickDNS --import C:\backup.json # duplicates (by name or server pair) are skipped
-QuickDNS --version
-QuickDNS --help
-```
+## Configuration & data
 
-### Your DNS list can't be wiped
+Everything lives in your user profile, so reinstalling or updating the executable never touches your data:
 
-Three independent safety nets:
-
-1. **Location** — presets live in the per-user config directory, so installing or updating the executable never touches them.
-2. **Auto-backup** — every clean start silently refreshes `presets.autobackup.json` (never overwritten while the store is empty).
-3. **Self-healing store** — if the SQLite file is ever damaged, it is quarantined as `DnsDB.db.corrupt-<timestamp>`, a fresh store is created and the auto-backup is restored into it automatically at the next start.
-
-Import is de-duplicated (by name and by server pair) and validated (every address must parse as IP), so re-importing after a partial restore is always safe.
-
-## Configuration
-
-Settings and presets live in the per-user config directory:
-
-- Windows: `%APPDATA%\QuickDns\`
-- Linux: `~/.config/QuickDns/`
+| | Windows | Linux |
+|---|---|---|
+| Config directory | `%APPDATA%\QuickDns\` | `~/.config/QuickDns/` |
 
 ```
-settings.json                     theme colors, history limit, target AdapterId (null = Auto), activity history
-DnsDB.db (+ DnsDB.db-wal/-shm)    SQLite preset store (WAL journaling)
-presets.autobackup.json           silent backup, refreshed on every clean start
-QuickDNS-presets-*.json           your manual exports (X key / --export)
-crash.log                         written when startup fails
+settings.json                    theme colors, history limit, target adapter (null = Auto), activity log
+DnsDB.db (+ -wal/-shm)           SQLite preset store (WAL journaling)
+presets.autobackup.json          silent backup, refreshed on every clean start
+QuickDNS-presets-*.json          your manual exports
+crash.log                        written if startup ever fails
 ```
 
-QuickDNS 1.x kept `settings.json` / `DnsDB.db` in the working directory; they are migrated automatically on first start (the legacy `Dns` table is imported into the new schema, nothing is lost).
+**Why an update can't wipe your DNS list:**
 
-Elevated requirement in short: **Windows** — start the terminal "as administrator"; **Linux** — `sudo QuickDNS` (or a polkit-enabled NetworkManager session).
+1. Presets live in the config directory above, independent of the executable.
+2. Every clean start silently refreshes the auto-backup (never overwritten while the store is empty).
+3. If the SQLite store is ever damaged, it is quarantined (`DnsDB.db.corrupt-<timestamp>`), a fresh store is created and the auto-backup is restored automatically.
+
+Coming from QuickDNS 1.x? Your old `settings.json` / `DnsDB.db` from the working directory are migrated on first start — the legacy table is imported row by row, nothing is lost.
+
+## Troubleshooting
+
+**"The app won't open at all"** — run the self-contained build. If you launch a framework-dependent build (e.g. `bin\Debug\...`) while the machine has a stale `DOTNET_ROOT` environment variable pointing at an older .NET runtime, the launcher aborts with *"You must install or update .NET"* before QuickDNS even starts. The release zips above are immune.
+
+**"Something failed at startup"** — the window stays open with the error, and the full stack trace is in `crash.log` in the config directory. `--diagnostics` is always safe to run.
+
+**Linux backends** — DNS changes are persistent with NetworkManager; `resolvectl` changes last until reboot/network restart; the `/etc/resolv.conf` fallback refuses to touch a systemd-resolved symlink (by design — use NetworkManager instead).
 
 ## Build
 
@@ -108,56 +110,51 @@ dotnet build QuickDNS.sln
 dotnet test  QuickDNS.sln
 ```
 
-Portable single-file publish (what CI ships):
+Portable single-file publish (exactly what CI does):
 
 ```bash
 dotnet publish QuickDnsConsole/QuickDnsConsole.csproj -c Release -r win-x64 \
   --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true \
   -p:PublishTrimmed=true -p:IncludeNativeLibrariesForSelfExtract=true \
   -p:DebugType=none -p:DebugSymbols=false -o publish/win-x64
-
-dotnet publish QuickDnsConsole/QuickDnsConsole.csproj -c Release -r linux-x64 \
-  --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true \
-  -p:PublishTrimmed=true -p:IncludeNativeLibrariesForSelfExtract=true \
-  -p:DebugType=none -p:DebugSymbols=false -o publish/linux-x64
+# same with -r linux-x64 for Linux
 ```
 
-CI (`.github/workflows/main.yml`) runs the test suite, then publishes `QuickDNS-win-x64.zip` and `QuickDNS-linux-x64.zip`; pushes to `master` refresh the `latest` release.
+CI runs the tests, then publishes both RIDs; pushes to `main` refresh the `latest` release.
 
 ## Performance notes
 
-Boot cost was the old design's weak spot: 1 s hard-coded sleep, generic-host startup, full WMI enumeration in a constructor, and fire-and-forget SQLite init races. QuickDNS 2.0 removes all four:
+The 1.x design paid a second of startup tax: a hard-coded `Thread.Sleep(1000)`, a generic host, full WMI enumeration in a constructor, and fire-and-forget database init. 2.x removes all of it:
 
-- composition root is ~10 lines of `new`, no `Microsoft.Extensions.Hosting`;
-- settings are read once, written atomically, and only when something changes;
-- the preset store uses short-lived pooled SQLite connections (WAL + busy timeout), so no long-lived file lock and no init races;
-- adapters are enumerated with `NetworkInterface.GetAllNetworkInterfaces()` (in-process, ~10 ms); WMI is contacted **only** when applying/clearing DNS, via a scoped `InterfaceIndex` query;
-- release builds are trimmed, ReadyToRun single files, with `InvariantGlobalization` and reflection-free JSON (source-generated serializer contexts) for trim safety.
+- composition root is ~10 lines of `new` — no `Microsoft.Extensions.Hosting`
+- SQLite opens lazily with short-lived pooled connections (WAL + busy timeout), no init races
+- WMI is contacted **only** when applying/clearing DNS, via a scoped `InterfaceIndex` query
+- trimmed ReadyToRun single file, reflection-free JSON, `InvariantGlobalization`
 
-Measured on the dev machine: `--diagnostics` (config → DB → adapter scan) ≈ **130 ms** warm, dashboard footer shows the real ready time each run.
+Measured on the dev machine: full `--diagnostics` (config → store → adapter scan) ≈ **130 ms**; the dashboard footer shows the real ready time on every run.
 
 ## Project layout
 
 ```
 QD.Core/
-  Application/Networking/    AdapterInfo, AdapterCatalog, INetworkAdapterService,
-                             WindowsNetworkAdapterService (WMI), LinuxNetworkAdapterService
-  Application/               DnsObjApplication — preset CRUD, adapter-aware apply/clear, export/import
-  Domain/                    repository contract
-  Infrastructure/SQLite/     DnsDatabase (schema, WAL, migrations, quarantine) + repository
+  Application/Networking/    adapter abstraction: Windows (WMI) + Linux (nmcli/resolvectl) services
+  Application/               preset CRUD, adapter-aware apply/clear, export/import
+  Infrastructure/SQLite/     store: schema, WAL, migrations, corruption quarantine
 QuickDnsConsole/
-  Program.cs                 composition root, --diagnostics/--export/--import, crash log
-  AppSettings.cs             settings model + source-generated JSON + atomic persistence
-  Tui/                       DnsTui (state machine), DashboardView (renderables), Input
-QD.Tests/                    xUnit: application logic (fakes), SQLite store integration
-                             (CRUD, migration, corruption quarantine), validation,
-                             settings round-trip, off-screen TUI rendering
+  Program.cs                 composition root, CLI, crash log
+  Tui/                       dashboard state machine, renderables, input
+QD.Tests/                    application logic (fakes), SQLite integration, TUI rendering
 ```
+
+## Version history
+
+- **2.1** — store redesign (WAL, migrations, self-healing), export/import + auto-backup, crash diagnostics, CI for win-x64 & linux-x64
+- **2.0** — cross-platform rewrite: new TUI, adapter targeting, fast boot, adapter services for Windows & Linux
 
 ## Roadmap
 
-- macOS support (`networksetup -setdnsservers`) — the `INetworkAdapterService` abstraction is ready for a third implementation.
+- macOS support (`networksetup`) — the adapter service abstraction is ready for a third implementation.
 
 ## License
 
-MIT (as before).
+No license file yet — until one is added, all rights are reserved by the repository owner.
