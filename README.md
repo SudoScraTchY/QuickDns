@@ -35,14 +35,20 @@ Pick a saved DNS preset, pick an adapter, press Enter — done. One self-contain
 
 ## Download
 
-Grab the latest build from the **[latest release](https://github.com/SudoScraTchY/QuickDns/releases/tag/latest)** (or the workflow artifacts):
+Grab the latest build from the **[latest release](https://github.com/SudoScraTchY/QuickDns/releases/tag/latest)** (or the workflow artifacts). Every zip is a **self-contained** single-file executable — no .NET installation needed. Unzip and run; that's the install. Each zip has a matching `.sha256` checksum file.
 
 | File | For |
 |---|---|
-| `QuickDNS-win-x64.zip` | Windows 10/11 |
-| `QuickDNS-linux-x64.zip` | Linux x64 |
+| `QuickDNS-win-x64.zip` | Windows 10/11 (x64) |
+| `QuickDNS-win-x86.zip` | Windows (32-bit x86) |
+| `QuickDNS-win-arm64.zip` | Windows on ARM |
+| `QuickDNS-linux-x64.zip` | Linux, glibc distros (x64) |
+| `QuickDNS-linux-arm64.zip` | Linux, glibc (ARM64 — Raspberry Pi 5, Graviton…) |
+| `QuickDNS-linux-arm.zip` | Linux, glibc (ARM32) |
+| `QuickDNS-linux-musl-x64.zip` | Alpine & other musl distros (x64) |
+| `QuickDNS-linux-musl-arm64.zip` | Alpine & other musl distros (ARM64) |
 
-Both are **self-contained** single-file executables — no .NET installation needed. Unzip and run; that's the install.
+macOS builds are not published yet — the app refuses to run there until the adapter service gains a macOS backend, and we don't ship binaries that can't work.
 
 ## Usage
 
@@ -120,7 +126,7 @@ dotnet publish QuickDnsConsole/QuickDnsConsole.csproj -c Release -r win-x64 \
 # same with -r linux-x64 for Linux
 ```
 
-CI runs the tests, then publishes both RIDs; pushes to `main` refresh the `latest` release.
+CI runs the test suite on Windows and Linux, then builds every target in the matrix (self-contained, trimmed, ReadyToRun single files with SHA256 checksums). Pushes to `main` refresh the rolling `latest` release; `v*` tags produce versioned releases with the tag version stamped into the executable.
 
 ## Performance notes
 
@@ -148,7 +154,7 @@ QD.Tests/                    application logic (fakes), SQLite integration, TUI 
 
 ## Version history
 
-- **2.1** — store redesign (WAL, migrations, self-healing), export/import + auto-backup, crash diagnostics, CI for win-x64 & linux-x64
+- **2.1** — store redesign (WAL, migrations, self-healing), export/import + auto-backup, crash diagnostics, multi-platform CI (Windows x64/x86/ARM64, Linux x64/ARM64/ARM32/musl)
 - **2.0** — cross-platform rewrite: new TUI, adapter targeting, fast boot, adapter services for Windows & Linux
 
 ## Roadmap

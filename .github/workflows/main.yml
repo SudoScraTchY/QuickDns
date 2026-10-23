@@ -1,87 +1,198 @@
-name: Build QuickDns
+name: Build & Release QuickDNS
+
+# Design
+# ------
+# - test:          run the test suite on Windows AND Linux (store + TUI must work on both).
+# - build:         one job per supported RID; self-contained, trimmed, ReadyToRun,
+#                  single-file executables. Every artifact gets a SHA256 checksum.
+# - release:       a. push to main          -> refresh the rolling "latest" prerelease
+#                                          (stable asset names, linked from the README)
+#                  b. push of a v* tag     -> versioned GitHub Release with auto notes;
+#                                          the tag version is stamped into the exe
+#                  PRs and manual dispatch build + upload artifacts only — never release.
+#
+# Supported matrix today: Windows (x64/x86/ARM64) and Linux (x64/ARM64/ARM32/musl-x64/musl-arm64).
+# macOS is intentionally absent: the adapter service has no macOS backend yet, so we do not
+# ship binaries that would refuse to run. To add it later, extend the matrix with
+# { os: macos-latest, rid: osx-arm64 } / { os: macos-latest, rid: osx-x64 } — one line each.
 
 on:
   push:
     branches: [ main, master ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
 jobs:
+  # ---------------------------------------------------------------- test ----
   test:
-    name: Test
-    runs-on: windows-latest
-
-    steps:
-    - name: Checkout repo
-      uses: actions/checkout@v4
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '9.0.x'
-
-    - name: Run tests
-      run: dotnet test QuickDNS.sln -c Release --nologo
-
-  publish:
-    name: Publish ${{ matrix.rid }}
-    needs: test
+    name: Test (${{ matrix.os }})
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            rid: win-x64
-            artifact: QuickDNS-win-x64
-          - os: ubuntu-latest
-            rid: linux-x64
-            artifact: QuickDNS-linux-x64
+        os: [ windows-latest, ubuntu-latest ]
     runs-on: ${{ matrix.os }}
 
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '9.0.x'
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
 
-    # Self-contained, trimmed, ReadyToRun single-file executable.
-    - name: Publish
-      run: >
-        dotnet publish QuickDnsConsole/QuickDnsConsole.csproj
-        -c Release -r ${{ matrix.rid }} --self-contained true
-        -p:PublishSingleFile=true
-        -p:PublishReadyToRun=true
-        -p:PublishTrimmed=true
-        -p:IncludeNativeLibrariesForSelfExtract=true
-        -p:DebugType=none -p:DebugSymbols=false
-        -o publish/${{ matrix.rid }}
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
 
-    - name: Package
-      shell: bash
-      run: |
-        cd publish/${{ matrix.rid }}
-        if [ -f QuickDNSConsole.exe ]; then mv QuickDNSConsole.exe QuickDNS.exe; fi
-        if [ -f QuickDNSConsole ]; then mv QuickDNSConsole QuickDNS; fi
-        7z a ../${{ matrix.artifact }}.zip .
+      - name: Run tests
+        run: dotnet test QuickDNS.sln -c Release --nologo
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ matrix.artifact }}
-        path: publish/${{ matrix.artifact }}.zip
+  # --------------------------------------------------------------- build ----
+  build:
+    name: Build ${{ matrix.rid }}
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, rid: win-x64,             artifact: QuickDNS-win-x64 }
+          - { os: windows-latest, rid: win-x86,             artifact: QuickDNS-win-x86 }
+          - { os: windows-latest, rid: win-arm64,           artifact: QuickDNS-win-arm64 }
+          - { os: ubuntu-latest,  rid: linux-x64,           artifact: QuickDNS-linux-x64 }
+          - { os: ubuntu-latest,  rid: linux-arm64,         artifact: QuickDNS-linux-arm64 }
+          - { os: ubuntu-latest,  rid: linux-arm,           artifact: QuickDNS-linux-arm }
+          - { os: ubuntu-latest,  rid: linux-musl-x64,      artifact: QuickDNS-linux-musl-x64 }
+          - { os: ubuntu-latest,  rid: linux-musl-arm64,    artifact: QuickDNS-linux-musl-arm64 }
+    runs-on: ${{ matrix.os }}
 
-    # action-gh-release defaults to the workflow's own GITHUB_TOKEN, so no
-    # explicit token mapping is needed here.
-    - name: Create/Update Release (Latest)
-      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: latest
-        name: "QuickDNS Latest Build"
-        files: |
-          publish/QuickDNS-win-x64.zip
-          publish/QuickDNS-linux-x64.zip
-        fail_on_unmatched_files: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      # Tag builds (refs/tags/vX.Y.Z) stamp the tag version into the executable.
+      - name: Compute version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "value=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish
+        shell: bash
+        run: |
+          ARGS=(
+            -c Release
+            -r "${{ matrix.rid }}"
+            --self-contained true
+            -p:PublishSingleFile=true
+            -p:PublishReadyToRun=true
+            -p:PublishTrimmed=true
+            -p:IncludeNativeLibrariesForSelfExtract=true
+            -p:DebugType=none -p:DebugSymbols=false
+            -o "publish/${{ matrix.rid }}"
+          )
+          if [[ -n "${{ steps.version.outputs.value }}" ]]; then
+            ARGS+=("-p:Version=${{ steps.version.outputs.value }}")
+          fi
+          dotnet publish QuickDnsConsole/QuickDnsConsole.csproj "${ARGS[@]}"
+
+      - name: Package (zip + SHA256)
+        shell: bash
+        run: |
+          cd "publish/${{ matrix.rid }}"
+          if [ -f QuickDNSConsole.exe ]; then mv QuickDNSConsole.exe QuickDNS.exe; fi
+          if [ -f QuickDNSConsole ]; then mv QuickDNSConsole QuickDNS; fi
+          7z a "../${{ matrix.artifact }}.zip" .
+          cd ..
+          sha256sum "${{ matrix.artifact }}.zip" > "${{ matrix.artifact }}.zip.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            publish/${{ matrix.artifact }}.zip
+            publish/${{ matrix.artifact }}.zip.sha256
+          if-no-files-found: error
+
+  # ------------------------------------------------------------- release ----
+  release:
+    name: Release
+    needs: build
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Collect artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # Tag push (vX.Y.Z): versioned release with GitHub auto-generated notes.
+      - name: Release tagged version
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: QuickDNS ${{ github.ref_name }}
+          files: dist/*
+          generate_release_notes: true
+          make_latest: "true"
+          fail_on_unmatched_files: true
+
+      # Push to main: refresh the rolling "latest" prerelease (stable asset names).
+      - name: Refresh rolling latest build
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "QuickDNS Latest Build (rolling)"
+          body: |
+            Rolling build from the latest `main` commit (${{ github.sha }}).
+
+            Self-contained single-file executables — no .NET install required.
+            Pick your platform: Windows (x64 / x86 / ARM64), Linux (x64 / ARM64 / ARM32, glibc or musl).
+            Every zip has a matching `.sha256` checksum file. macOS builds are not provided yet.
+          prerelease: true
+          make_latest: "false"
+          files: dist/*
+          fail_on_unmatched_files: true
