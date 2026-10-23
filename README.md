@@ -4,6 +4,7 @@
 Pick a saved DNS preset, pick an adapter, press Enter — done. One self-contained executable, no installer, no runtime dependencies.
 
 [![Build QuickDns](https://github.com/SudoScraTchY/QuickDns/actions/workflows/main.yml/badge.svg)](https://github.com/SudoScraTchY/QuickDns/actions/workflows/main.yml)
+[![Project website](https://img.shields.io/badge/project%20website-sudoscratchy.github.io%2FQuickDns-0b0c10)](https://sudoscratchy.github.io/QuickDNS/)
 
 ```
 ╭─ QuickDNS v2.1.0 ──────────────────────────────────────────────────────────╮
