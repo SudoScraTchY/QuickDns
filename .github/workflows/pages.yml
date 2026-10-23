@@ -1,8 +1,11 @@
-name: Deploy GitHub Pages
+name: Publish site to gh-pages
 
-# Deploys the static site in docs/ to GitHub Pages on every change.
-# Note: if the very first run fails because Pages is not yet enabled on the
-# repository, enable it once via Settings > Pages > Source: "GitHub Actions".
+# Branch-based GitHub Pages: this workflow mirrors docs/index.html onto the
+# gh-pages branch, which GitHub Pages serves (Source: "Deploy from a branch").
+#
+# ONE-TIME SETUP (repo owner): Settings > Pages > Build and deployment >
+#   Source: "Deploy from a branch" > Branch: gh-pages > Folder: / (root) > Save.
+# After that every push to main redeploys the site automatically.
 
 on:
   push:
@@ -11,34 +14,51 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  publish:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
+      - name: Publish docs to gh-pages
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Upload site
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs
+          rm -rf site && mkdir site
+          cp docs/index.html site/
+          touch site/.nojekyll
 
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+          cd site
+          git init -q -b gh-pages
+
+          # Reuse the checkout action's persisted credentials for the push.
+          auth=$(git -C "$GITHUB_WORKSPACE" config --get http.https://github.com/.extraheader || true)
+          if [ -n "$auth" ]; then
+            git config "http.https://github.com/.extraheader" "$auth"
+          fi
+
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git add -A
+          git commit -qm "Publish site from commit ${GITHUB_SHA}" --allow-empty
+          git push -q -f origin gh-pages
+
+      - name: Verify live (best effort)
+        shell: bash
+        run: |
+          sleep 30
+          owner=$(echo "${GITHUB_REPOSITORY%%/*}" | tr '[:upper:]' '[:lower:]')
+          code=$(curl -s -o /dev/null -w "%{http_code}" "https://${owner}.github.io/QuickDns/")
+          if [ "$code" != "200" ]; then
+            echo "::warning::Site is not live yet (HTTP $code). First-time setup: Settings > Pages > Build and deployment > Source: 'Deploy from a branch' > Branch: gh-pages > Folder: / (root) > Save."
+          else
+            echo "Site is live."
+          fi
