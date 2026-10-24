@@ -43,6 +43,7 @@ Grab the latest build from the **[latest release](https://github.com/SudoScraTch
 | `QuickDNS-win-x64.zip` | Windows 10/11 (x64) |
 | `QuickDNS-win-x86.zip` | Windows (32-bit x86) |
 | `QuickDNS-win-arm64.zip` | Windows on ARM |
+| `QuickDNS-win-x64-aot.zip` | Windows x64, experimental NativeAOT build (fastest startup) |
 | `QuickDNS-linux-x64.zip` | Linux, glibc distros (x64) |
 | `QuickDNS-linux-arm64.zip` | Linux, glibc (ARM64 — Raspberry Pi 5, Graviton…) |
 | `QuickDNS-linux-arm.zip` | Linux, glibc (ARM32) |
@@ -110,7 +111,7 @@ Coming from QuickDNS 1.x? Your old `settings.json` / `DnsDB.db` from the working
 
 ## Build
 
-Requires the .NET 9 SDK.
+Requires the .NET 11 SDK (the repository currently pins the 11.0 RC; bump `global.json` after GA).
 
 ```bash
 dotnet build QuickDNS.sln
@@ -137,8 +138,17 @@ The 1.x design paid a second of startup tax: a hard-coded `Thread.Sleep(1000)`, 
 - SQLite opens lazily with short-lived pooled connections (WAL + busy timeout), no init races
 - WMI is contacted **only** when applying/clearing DNS, via a scoped `InterfaceIndex` query
 - trimmed ReadyToRun single file, reflection-free JSON, `InvariantGlobalization`
+- .NET 11 with dead runtime services switched off (concurrent GC, startup hooks, EventSource, hot reload, reflection JSON)
 
-Measured on the dev machine: full `--diagnostics` (config → store → adapter scan) ≈ **130 ms**; the dashboard footer shows the real ready time on every run.
+Measured on the dev machine (median of 15 warm runs):
+
+| Build | `--version` (pure boot) | `--diagnostics` (boot + store + adapters) | Size |
+|---|---|---|---|
+| .NET 9, R2R + trimmed | 40 ms | 122 ms | 22.9 MB |
+| **.NET 11, R2R + trimmed** | **25 ms** | **122 ms** | 23.3 MB |
+| .NET 11, NativeAOT (experimental) | measured in CI below | measured in CI below | see CI artifact |
+
+The adapter/store work dominates `--diagnostics`, so that number is workload-bound; pure process boot (the part the .NET version controls) dropped 37%.
 
 ## Project layout
 
@@ -155,6 +165,7 @@ QD.Tests/                    application logic (fakes), SQLite integration, TUI 
 
 ## Version history
 
+- **2.2** — .NET 11 (RC2) upgrade: boot measured 40 ms → 25 ms, runtime services trimmed, experimental NativeAOT build in CI
 - **2.1** — store redesign (WAL, migrations, self-healing), export/import + auto-backup, crash diagnostics, multi-platform CI (Windows x64/x86/ARM64, Linux x64/ARM64/ARM32/musl)
 - **2.0** — cross-platform rewrite: new TUI, adapter targeting, fast boot, adapter services for Windows & Linux
 

@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework>net9.0</TargetFramework>
+        <TargetFramework>net11.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <ApplicationIcon>QuickDNS.ico</ApplicationIcon>
@@ -12,10 +12,26 @@
         <LangVersion>13</LangVersion>
         <AssemblyName>QuickDNSConsole</AssemblyName>
         <RootNamespace>QuickDNSConsole</RootNamespace>
-        <Version>2.1.0</Version>
+        <Version>2.2.0</Version>
         <!-- Trims ICU and avoids globalization startup cost; the app formats
              fixed-pattern strings only. -->
         <InvariantGlobalization>true</InvariantGlobalization>
+
+        <!-- Startup/runtime switches: this is a small short-lived-process-friendly
+             console app, so several runtime services are dead weight. -->
+        <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+        <StartupHookSupport>false</StartupHookSupport>
+        <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+        <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>
+        <!-- AOT: prefer speed over size for the native build. -->
+        <OptimizationPreference>Speed</OptimizationPreference>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+        <!-- Release-only trims: no debugger, no hot reload, no EventSource in prod builds. -->
+        <DebuggerSupport>false</DebuggerSupport>
+        <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
+        <EventSourceSupport>false</EventSourceSupport>
     </PropertyGroup>
 
     <ItemGroup>
