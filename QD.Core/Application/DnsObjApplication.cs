@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using QD.Core.Application.Networking;
 using QD.Core.Cotracts.DnsObjContracts;
@@ -160,7 +161,11 @@ public class DnsObjApplication(
             if (!File.Exists(filePath))
                 return result.Failed($"Import file not found: {filePath}");
 
-            var transfer = JsonSerializer.Deserialize(File.ReadAllText(filePath), PresetTransferJsonContext.Default.PresetTransferFile);
+            var text = File.ReadAllText(filePath).TrimStart('\uFEFF');
+            var transfer = text.TrimStart().StartsWith("{")
+                ? JsonSerializer.Deserialize(text, PresetTransferJsonContext.Default.PresetTransferFile)
+                : ParseLineFormat(text);
+
             if (transfer is null || transfer.Presets.Count == 0)
                 return result.Failed("Import file contains no presets.");
 
@@ -204,6 +209,32 @@ public class DnsObjApplication(
         }
     }
 
+    public OperationResult ExportPresetsCsv(string filePath)
+    {
+        var result = new OperationResult();
+
+        try
+        {
+            var presets = _dnsObjRepository.GetAll();
+            var builder = new StringBuilder();
+            builder.AppendLine("name,primary_dns,secondary_dns");
+            foreach (var preset in presets)
+            {
+                builder.AppendLine(string.Join(",",
+                    CsvField(preset.Name ?? string.Empty),
+                    CsvField(preset.FirstDns),
+                    CsvField(preset.SecondDns)));
+            }
+
+            WriteAtomically(filePath, builder.ToString());
+            return result.Succeeded($"Exported {presets.Count} preset(s) → {filePath}");
+        }
+        catch (Exception ex)
+        {
+            return result.Failed($"Export failed: {ex.Message}");
+        }
+    }
+
     public OperationResult WriteAutoBackup(string filePath)
     {
         // Never clobber a good backup with the empty store of a fresh/corrupted start.
@@ -215,7 +246,54 @@ public class DnsObjApplication(
 
     // ---- helpers -------------------------------------------------------------
 
-    private static void WriteAtomically(string filePath, PresetTransferFile transfer)
+    /// <summary>
+    /// Line format: one DNS per line, fields separated by comma, semicolon or tab.
+    /// Blank lines and lines starting with '#' are skipped. If the first field parses
+    /// as an IP address the row is unnamed and is named after its server;
+    /// otherwise the first field is the name: name,primary[,secondary].
+    /// </summary>
+    private static PresetTransferFile ParseLineFormat(string text)
+    {
+        var transfer = new PresetTransferFile { App = "QuickDNS (line format)" };
+
+        foreach (var raw in text.Split('\n'))
+        {
+            var line = raw.Trim().TrimEnd('\r');
+            if (line.Length == 0 || line.StartsWith('#'))
+                continue;
+
+            var fields = line.Split([',', ';', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (fields.Length == 0)
+                continue;
+
+            string name, primary, secondary = string.Empty;
+            if (DnsValidator.IsValidIpAddress(fields[0]))
+            {
+                primary = fields[0];
+                if (fields.Length > 1)
+                    secondary = fields[1];
+                name = primary;
+            }
+            else
+            {
+                name = fields[0];
+                primary = fields.Length > 1 ? fields[1] : string.Empty;
+                if (fields.Length > 2)
+                    secondary = fields[2];
+            }
+
+            transfer.Presets.Add(new PresetTransferItem { Name = name, PrimaryDns = primary, SecondaryDns = secondary });
+        }
+
+        return transfer;
+    }
+
+    private static string CsvField(string value) =>
+        value.Contains(',') || value.Contains('"') || value.Contains('\n')
+            ? $"\"{value.Replace("\"", "\"\"")}\""
+            : value;
+
+    private static void WriteAtomically(string filePath, string content)
     {
         var fullPath = Path.GetFullPath(filePath);
         var directory = Path.GetDirectoryName(fullPath);
@@ -223,8 +301,13 @@ public class DnsObjApplication(
             Directory.CreateDirectory(directory);
 
         var temp = fullPath + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(transfer, PresetTransferJsonContext.Default.PresetTransferFile));
+        File.WriteAllText(temp, content);
         File.Move(temp, fullPath, overwrite: true);
+    }
+
+    private static void WriteAtomically(string filePath, PresetTransferFile transfer)
+    {
+        WriteAtomically(filePath, JsonSerializer.Serialize(transfer, PresetTransferJsonContext.Default.PresetTransferFile));
     }
 
     private static string? Validate(string? name, string? firstDns, string? secondDns)

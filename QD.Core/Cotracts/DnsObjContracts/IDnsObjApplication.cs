@@ -34,7 +34,14 @@ public interface IDnsObjApplication
     /// <summary>Writes all presets to a portable JSON file (atomically).</summary>
     OperationResult ExportPresets(string filePath);
 
-    /// <summary>Validates, de-duplicates and imports presets from an export file.</summary>
+    /// <summary>Writes all presets to a simple CSV file: name,primary_dns,secondary_dns.</summary>
+    OperationResult ExportPresetsCsv(string filePath);
+
+    /// <summary>
+    /// Validates, de-duplicates and imports presets from a file. Format is auto-detected:
+    /// QuickDNS JSON exports, or plain line format (one DNS per line, comma/semicolon/tab
+    /// separated, '#' comments, unnamed rows are named after their server).
+    /// </summary>
     OperationResult ImportPresets(string filePath);
 
     /// <summary>Refreshes the automatic backup file. No-op when the store is empty

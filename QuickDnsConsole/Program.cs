@@ -44,7 +44,7 @@ internal static class Program
 
             stopwatch.Stop();
 
-            new DnsTui(dnsApp, adapters, settings, stopwatch.Elapsed, startupWarning).Run();
+            new DnsTui(dnsApp, adapters, settings, stopwatch.Elapsed, new DnsProbeService(), startupWarning).Run();
             return 0;
         }
         catch (PlatformNotSupportedException ex)
@@ -78,6 +78,20 @@ internal static class Program
                     ? args[index + 1]
                     : AppPaths.NewExportFile();
                 return RunStoreOperation(app => app.ExportPresets(exportPath));
+
+            case "--export-csv" or "-c":
+                var csvPath = index + 1 < args.Length && !args[index + 1].StartsWith('-')
+                    ? args[index + 1]
+                    : AppPaths.NewExportFile(".csv");
+                return RunStoreOperation(app => app.ExportPresetsCsv(csvPath));
+
+            case "--test" or "-t":
+                if (index + 1 >= args.Length)
+                {
+                    Console.Error.WriteLine("--test requires a preset name or DNS server IP (see --help).");
+                    return 2;
+                }
+                return RunTestOperation(args[index + 1]);
 
             case "--import" or "-i":
                 if (index + 1 >= args.Length)
@@ -162,6 +176,51 @@ internal static class Program
         }
     }
 
+    /// <summary>--test: ping, DNS query speed and reachability for a preset name or a raw IP.</summary>
+    private static int RunTestOperation(string target)
+    {
+        try
+        {
+            var (app, _, _) = CreateApplication();
+            IDnsProbeService probe = new DnsProbeService();
+
+            DnsObjViewModel? preset = null;
+            var isIp = DnsValidator.IsValidIpAddress(target);
+            if (!isIp)
+                preset = app.GetAll().FirstOrDefault(p => string.Equals(p.Name, target.Trim(), StringComparison.OrdinalIgnoreCase));
+
+            if (!isIp && preset is null)
+            {
+                Console.Error.WriteLine($"No preset named '{target}'.");
+                return 1;
+            }
+
+            if (preset is not null)
+                Console.WriteLine($"Preset: {preset.Name} ({preset.DnsAddresses})");
+
+            var first = preset?.FirstDns ?? target.Trim();
+            PrintProbe(first, probe.Probe(first));
+            if (preset is not null && !string.IsNullOrWhiteSpace(preset.SecondDns))
+                PrintProbe(preset.SecondDns, probe.Probe(preset.SecondDns));
+
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            return Fail(ex);
+        }
+    }
+
+    private static void PrintProbe(string server, DnsProbeResult result)
+    {
+        Console.WriteLine($"Server {server}");
+        Console.WriteLine($"  ping       {(result.PingMs is { } p ? $"{p:F0} ms" : "n/a")}");
+        Console.WriteLine($"  dns query  {(result.DnsMs is { } d ? $"{d:F0} ms" : "n/a")}");
+        Console.WriteLine($"  tcp 53     {(result.TcpMs is { } t ? $"{t:F0} ms" : "n/a")}");
+        Console.WriteLine($"  verdict    {(result.Reachable ? "reachable" : "unreachable")}{(result.Note.Length > 0 ? $" ({result.Note})" : string.Empty)}");
+        Console.WriteLine();
+    }
+
     private static int Fail(Exception ex)
     {
         try
@@ -199,7 +258,9 @@ internal static class Program
         Console.WriteLine("  (no option)    Launch the interactive dashboard");
         Console.WriteLine("  --diagnostics  Print platform, elevation, DNS backend, adapters and store, then exit");
         Console.WriteLine("  --export [path]   Export all presets to a portable JSON file (default: a new file in the config dir)");
-        Console.WriteLine("  --import <path>   Import presets from an export file (duplicates are skipped)");
+        Console.WriteLine("  --export-csv [path]  Export all presets to CSV (name,primary,secondary)");
+        Console.WriteLine("  --import <path>   Import presets from a JSON or line-format file (duplicates are skipped)");
+        Console.WriteLine("  --test <name|ip>  Ping, DNS query speed and reachability for a preset or server");
         Console.WriteLine("  --version      Print version and exit");
         Console.WriteLine("  --help         Show this help");
         Console.WriteLine();

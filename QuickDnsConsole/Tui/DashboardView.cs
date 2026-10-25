@@ -168,13 +168,16 @@ internal static class DashboardView
 
         var keys = string.Join("   ",
             "[b]↑↓[/] select",
-            "[b]Home/End[/] jump",
             "[b]↵[/] apply",
             "[b]A[/] adapter",
             "[b]C[/] new",
             "[b]E[/] edit",
             "[b]D[/] delete",
             "[b]U[/] unset",
+            "[b]X[/] export",
+            "[b]I[/] import",
+            "[b]T[/] test",
+            "[b]B[/] bench",
             "[b]R[/] refresh",
             "[b]Q[/] quit");
 

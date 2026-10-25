@@ -16,6 +16,8 @@ internal enum DashboardAction
     AdapterPicker,
     Export,
     Import,
+    Test,
+    Benchmark,
 }
 
 /// <summary>
@@ -28,6 +30,7 @@ public sealed class DnsTui
 {
     private readonly IDnsObjApplication _dnsApp;
     private readonly INetworkAdapterService _adapterService;
+    private readonly IDnsProbeService _probeService;
     private readonly AppSettings _settings;
     private readonly TimeSpan _bootTime;
 
@@ -40,11 +43,13 @@ public sealed class DnsTui
         INetworkAdapterService adapterService,
         AppSettings settings,
         TimeSpan bootTime,
+        IDnsProbeService probeService,
         string? startupWarning = null)
     {
         _dnsApp = dnsApp ?? throw new ArgumentNullException(nameof(dnsApp));
         _adapterService = adapterService ?? throw new ArgumentNullException(nameof(adapterService));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _probeService = probeService ?? throw new ArgumentNullException(nameof(probeService));
         _bootTime = bootTime;
 
         if (!string.IsNullOrEmpty(startupWarning))
@@ -83,6 +88,14 @@ public sealed class DnsTui
 
                 case DashboardAction.AdapterPicker:
                     RunAdapterPicker();
+                    continue;
+
+                case DashboardAction.Test:
+                    RunTestForm(presets[_selectedIndex]);
+                    continue;
+
+                case DashboardAction.Benchmark:
+                    RunBenchmarkForm(presets);
                     continue;
 
                 case DashboardAction.Export:
@@ -253,6 +266,22 @@ public sealed class DnsTui
                         action = DashboardAction.Import;
                         return;
 
+                    case ConsoleKey.T:
+                        if (presets.Count > 0)
+                        {
+                            action = DashboardAction.Test;
+                            return;
+                        }
+                        break;
+
+                    case ConsoleKey.B:
+                        if (presets.Count > 0)
+                        {
+                            action = DashboardAction.Benchmark;
+                            return;
+                        }
+                        break;
+
                     case ConsoleKey.R:
                     case ConsoleKey.F5:
                         action = DashboardAction.Refresh;
@@ -384,13 +413,24 @@ public sealed class DnsTui
     {
         AnsiConsole.Clear();
         WriteFormHeader("-- Export presets --");
-        AnsiConsole.MarkupLine($" [grey]Default file:[/] {Markup.Escape(AppPaths.NewExportFile())}");
+        AnsiConsole.MarkupLine(" [grey]json = QuickDNS format · csv = plain name,primary,secondary list[/]");
+
+        var format = Input.Ask("Format json/csv (Enter = json)", defaultValue: "json",
+            validator: v => string.Equals(v, "json", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(v, "csv", StringComparison.OrdinalIgnoreCase)
+                ? null
+                : "Enter json or csv.");
+        if (format is null) { Cancelled(); return; }
+
+        var isCsv = format.Equals("csv", StringComparison.OrdinalIgnoreCase);
+        var defaultPath = AppPaths.NewExportFile(isCsv ? ".csv" : ".json");
+        AnsiConsole.MarkupLine($" [grey]Default file:[/] {Markup.Escape(defaultPath)}");
 
         var path = Input.Ask("Export file (Enter = default)");
         if (path is null) { Cancelled(); return; }
 
-        var effective = string.IsNullOrWhiteSpace(path) ? AppPaths.NewExportFile() : path.Trim();
-        var result = Safe(() => _dnsApp.ExportPresets(effective));
+        var effective = string.IsNullOrWhiteSpace(path) ? defaultPath : path.Trim();
+        var result = Safe(() => isCsv ? _dnsApp.ExportPresetsCsv(effective) : _dnsApp.ExportPresets(effective));
         SetStatus(result);
         if (result.IsSucceeded)
             AddHistory($"Exported presets → {Path.GetFileName(effective)}");
@@ -477,6 +517,103 @@ public sealed class DnsTui
         }
 
         return table;
+    }
+
+    // ---- modal: ping / speed / reachability ----------------------------------
+
+    private void RunTestForm(DnsObjViewModel preset)
+    {
+        AnsiConsole.Clear();
+        WriteFormHeader($"-- Test: {preset.Name} --");
+        AnsiConsole.MarkupLine(" [grey]ICMP ping · real DNS A query over UDP 53 · TCP connect to port 53 · 2s timeout each[/]");
+        AnsiConsole.WriteLine();
+
+        var servers = new List<string> { preset.FirstDns };
+        if (!string.IsNullOrWhiteSpace(preset.SecondDns))
+            servers.Add(preset.SecondDns);
+
+        var results = new List<(string Server, DnsProbeResult Result)>();
+        foreach (var server in servers)
+        {
+            AnsiConsole.MarkupLine($" [grey]probing {Markup.Escape(server)} …[/]");
+            results.Add((server, ProbeSafely(server)));
+        }
+
+        AnsiConsole.Clear();
+        WriteFormHeader($"-- Test: {preset.Name} --");
+        AnsiConsole.Write(BuildProbeTable(results.Select(r => (string.Empty, r.Server, r.Result))));
+        SetStatus(results.All(r => r.Result.Reachable)
+            ? new OperationResult().Succeeded($"'{preset.Name}' is reachable")
+            : new OperationResult().Failed($"'{preset.Name}' did not answer"));
+        PromptAnyKey();
+    }
+
+    private void RunBenchmarkForm(IReadOnlyList<DnsObjViewModel> presets)
+    {
+        AnsiConsole.Clear();
+        WriteFormHeader("-- Benchmark presets --");
+        AnsiConsole.MarkupLine(" [grey]probing the primary server of every preset …[/]");
+
+        var results = new List<(string Name, DnsProbeResult Result)>();
+        var n = 0;
+        foreach (var preset in presets)
+        {
+            n++;
+            AnsiConsole.MarkupLine($" [grey]testing {n}/{presets.Count} {Markup.Escape(preset.Name ?? "?")} …[/]");
+            results.Add((preset.Name ?? "?", ProbeSafely(preset.FirstDns)));
+        }
+
+        AnsiConsole.Clear();
+        WriteFormHeader("-- Benchmark: DNS query speed --");
+        AnsiConsole.Write(BuildProbeTable(results
+            .Select(r => (r.Name, r.Result.Server, r.Result))
+            .OrderBy(r => r.Result.DnsMs ?? double.MaxValue)));
+        AddHistory($"Benchmarked {results.Count} presets");
+        PromptAnyKey();
+    }
+
+    private IRenderable BuildProbeTable(IEnumerable<(string Label, string Server, DnsProbeResult Result)> rows)
+    {
+        var accent = new Style(_settings.AccentColor.ToSpectreColor());
+        var table = new Table()
+            .Border(TableBorder.Rounded)
+            .BorderStyle(accent)
+            .Expand();
+        table.Title = new TableTitle(" [bold] DNS server probe [/] ", accent);
+        table.AddColumn("[u]Preset[/]");
+        table.AddColumn("[u]Server[/]");
+        table.AddColumn("[u]Ping[/]");
+        table.AddColumn("[u]DNS query[/]");
+        table.AddColumn("[u]TCP 53[/]");
+        table.AddColumn("[u]Verdict[/]");
+
+        foreach (var (label, server, result) in rows)
+        {
+            table.AddRow(
+                Markup.Escape(label),
+                Markup.Escape(server),
+                result.PingMs is { } p ? $"{p:F0} ms" : "[grey]n/a[/]",
+                result.DnsMs is { } d ? $"[green]{d:F0} ms[/]" : "[red]timeout[/]",
+                result.TcpMs is { } t ? $"{t:F0} ms" : "[grey]n/a[/]",
+                result.Reachable
+                    ? $"[green]{(result.DnsMs is not null ? "reachable" : "tcp only")}[/]"
+                    : $"[red]unreachable[/] {Markup.Escape(result.Note)}");
+        }
+
+        return table;
+    }
+
+    /// <summary>Runs a probe, converting unexpected exceptions into an unreachable result.</summary>
+    private DnsProbeResult ProbeSafely(string server)
+    {
+        try
+        {
+            return _probeService.Probe(server);
+        }
+        catch (Exception ex)
+        {
+            return new DnsProbeResult(server, null, null, null, ex.Message);
+        }
     }
 
     // ---- modal: forms -------------------------------------------------------

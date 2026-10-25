@@ -24,8 +24,10 @@ public static class AppPaths
     /// <summary>Silent backup refreshed on every successful start.</summary>
     public static string AutoBackupFile => Path.Combine(ConfigDirectory, "presets.autobackup.json");
 
-    public static string NewExportFile() =>
-        Path.Combine(ConfigDirectory, $"QuickDNS-presets-{DateTime.Now:yyyyMMdd-HHmmss}.json");
+    public static string NewExportFile() => NewExportFile(".json");
+
+    public static string NewExportFile(string extension) =>
+        Path.Combine(ConfigDirectory, $"QuickDNS-presets-{DateTime.Now:yyyyMMdd-HHmmss}{extension}");
 
     /// <summary>Importable export files in the config directory, newest first.</summary>
     public static IReadOnlyList<string> GetExportFiles()
@@ -35,9 +37,9 @@ public static class AppPaths
             if (!Directory.Exists(ConfigDirectory))
                 return [];
 
-            return Directory.GetFiles(ConfigDirectory, "*.json")
-                .Where(f => Path.GetFileName(f).StartsWith("QuickDNS-presets-", StringComparison.OrdinalIgnoreCase)
-                            || Path.GetFileName(f).Equals("presets.autobackup.json", StringComparison.OrdinalIgnoreCase))
+            return Directory.GetFiles(ConfigDirectory, "QuickDNS-presets-*")
+                .Concat(new[] { AutoBackupFile })
+                .Where(File.Exists)
                 .OrderByDescending(File.GetLastWriteTime)
                 .ToList();
         }

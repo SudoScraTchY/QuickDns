@@ -30,7 +30,8 @@ Pick a saved DNS preset, pick an adapter, press Enter — done. One self-contain
 - **Cross-platform** — Windows via WMI; Linux via NetworkManager (`nmcli`, persistent), `systemd-resolved` (`resolvectl`), or `/etc/resolv.conf` fallback — auto-detected
 - **Fast boot** — ready in tens of milliseconds; trimmed, ReadyToRun, self-contained single file
 - **Update-proof data** — presets live in your user profile, an auto-backup is refreshed on every clean start, and a corrupted store self-heals from it
-- **Portable presets** — export/import to versioned JSON (`X`/`I` keys or CLI), de-duplicated and validated on import
+- **Portable presets** — export/import to versioned JSON or simple CSV/line format (`X`/`I` keys or CLI), de-duplicated and validated on import
+- **Built-in DNS testing** — ping, real DNS query speed and TCP/UDP reachability for the selected preset (`T`) or a speed benchmark across all presets (`B`)
 - **First-run friendly** — ships with Cloudflare, Google, Quad9, OpenDNS and AdGuard presets
 - **Honest feedback** — IP validation on input, confirm-before-delete, elevation warnings, inline success/error messages, `crash.log` when anything fails
 
@@ -58,9 +59,13 @@ macOS builds are not published yet — the app refuses to run there until the ad
 QuickDNS                          # launch the interactive dashboard
 QuickDNS --diagnostics            # platform, elevation, DNS backend, adapters, store — read-only
 QuickDNS --export [path]          # all presets → portable JSON (default: new file in the config dir)
-QuickDNS --import <path>          # import presets; duplicates (name or server pair) are skipped
+QuickDNS --export-csv [path]      # all presets → CSV (name,primary,secondary)
+QuickDNS --import <path>          # import JSON or line format; duplicates are skipped
+QuickDNS --test <name|ip>         # ping, DNS query speed and reachability probe
 QuickDNS --version | --help
 ```
+
+Bulk files are simple text, one DNS per line: `Name,primary,secondary`, `primary,secondary` or just `primary`. `#` starts a comment, and comma, semicolon or tab all work as separators. Unnamed rows are named after their server.
 
 Dashboard keys:
 
@@ -71,7 +76,8 @@ Dashboard keys:
 | `A` | Choose target adapter (or Auto) |
 | `C` / `E` / `D` | Create / edit / delete preset (`Y` confirms delete) |
 | `U` | Clear DNS — back to automatic (DHCP) |
-| `X` / `I` | Export presets to JSON / import from an export file |
+| `X` / `I` | Export presets to JSON/CSV / import (JSON or line format, auto-detected) |
+| `T` / `B` | Test selected preset (ping, DNS speed, reachability) / benchmark all presets |
 | `R` / `F5` | Refresh adapter + DNS state |
 | `Q` / `Esc` | Quit |
 
@@ -165,6 +171,7 @@ QD.Tests/                    application logic (fakes), SQLite integration, TUI 
 
 ## Version history
 
+- **2.3** — bulk import/export (CSV + line format, auto-detected), ping / DNS-speed / reachability tests (`T` test, `B` benchmark, `--test` CLI)
 - **2.2** — .NET 11 (RC2) upgrade: boot measured 40 ms → 25 ms (R2R) → 8 ms (experimental NativeAOT), runtime services trimmed, size 22.9 MB → 7.5 MB with AOT
 - **2.1** — store redesign (WAL, migrations, self-healing), export/import + auto-backup, crash diagnostics, multi-platform CI (Windows x64/x86/ARM64, Linux x64/ARM64/ARM32/musl)
 - **2.0** — cross-platform rewrite: new TUI, adapter targeting, fast boot, adapter services for Windows & Linux
