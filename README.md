@@ -32,6 +32,7 @@ Pick a saved DNS preset, pick an adapter, press Enter — done. One self-contain
 - **Update-proof data** — presets live in your user profile, an auto-backup is refreshed on every clean start, and a corrupted store self-heals from it
 - **Portable presets** — export/import to versioned JSON or simple CSV/line format (`X`/`I` keys or CLI), de-duplicated and validated on import
 - **Built-in DNS testing** — ping, real DNS query speed and TCP/UDP reachability for the selected preset (`T`) or a speed benchmark across all presets (`B`)
+- **Optional DNS catalog** — a bundled bulk file of free resolvers: global (Cloudflare, Google, Quad9, OpenDNS, AdGuard, Control D, Mullvad…) and Iranian (Shecan, Shatel, Electro, Begzar, Radar Game, 403.online, Shelter, Pishgaman, TCI), import one or all (`G`)
 - **First-run friendly** — ships with Cloudflare, Google, Quad9, OpenDNS and AdGuard presets
 - **Honest feedback** — IP validation on input, confirm-before-delete, elevation warnings, inline success/error messages, `crash.log` when anything fails
 
@@ -74,6 +75,7 @@ Dashboard keys:
 | `↑` `↓` · `Home` `End` · `PgUp` `PgDn` | Move selection |
 | `Enter` | Apply the selected preset to the target adapter |
 | `A` | Choose target adapter (or Auto) |
+| `G` | **DNS catalog**: import bundled free resolvers, global + Iranian (Shecan, Shatel, Electro, Begzar, Radar Game, 403.online and more) |
 | `C` / `E` / `D` | Create / edit / delete preset (`Y` confirms delete) |
 | `U` | Clear DNS — back to automatic (DHCP) |
 | `X` / `I` | Export presets to JSON/CSV / import (JSON or line format, auto-detected) |
@@ -171,6 +173,7 @@ QD.Tests/                    application logic (fakes), SQLite integration, TUI 
 
 ## Version history
 
+- **2.4** — optional built-in DNS catalog (`G`): bundled bulk file of global + Iranian free resolvers with import-one/import-all
 - **2.3** — bulk import/export (CSV + line format, auto-detected), ping / DNS-speed / reachability tests (`T` test, `B` benchmark, `--test` CLI)
 - **2.2** — .NET 11 (RC2) upgrade: boot measured 40 ms → 25 ms (R2R) → 8 ms (experimental NativeAOT), runtime services trimmed, size 22.9 MB → 7.5 MB with AOT
 - **2.1** — store redesign (WAL, migrations, self-healing), export/import + auto-backup, crash diagnostics, multi-platform CI (Windows x64/x86/ARM64, Linux x64/ARM64/ARM32/musl)

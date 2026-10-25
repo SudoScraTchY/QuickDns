@@ -1,3 +1,4 @@
+using QD.Core.Application.Catalog;
 using QD.Core.Application.Networking;
 using QD.Core.Cotracts.DnsObjContracts;
 using QD.Core.Helper;
@@ -18,6 +19,7 @@ internal enum DashboardAction
     Import,
     Test,
     Benchmark,
+    Catalog,
 }
 
 /// <summary>
@@ -31,6 +33,7 @@ public sealed class DnsTui
     private readonly IDnsObjApplication _dnsApp;
     private readonly INetworkAdapterService _adapterService;
     private readonly IDnsProbeService _probeService;
+    private readonly IDnsCatalog _catalog;
     private readonly AppSettings _settings;
     private readonly TimeSpan _bootTime;
 
@@ -44,12 +47,14 @@ public sealed class DnsTui
         AppSettings settings,
         TimeSpan bootTime,
         IDnsProbeService probeService,
+        IDnsCatalog catalog,
         string? startupWarning = null)
     {
         _dnsApp = dnsApp ?? throw new ArgumentNullException(nameof(dnsApp));
         _adapterService = adapterService ?? throw new ArgumentNullException(nameof(adapterService));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _probeService = probeService ?? throw new ArgumentNullException(nameof(probeService));
+        _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _bootTime = bootTime;
 
         if (!string.IsNullOrEmpty(startupWarning))
@@ -96,6 +101,10 @@ public sealed class DnsTui
 
                 case DashboardAction.Benchmark:
                     RunBenchmarkForm(presets);
+                    continue;
+
+                case DashboardAction.Catalog:
+                    RunCatalogForm();
                     continue;
 
                 case DashboardAction.Export:
@@ -265,6 +274,14 @@ public sealed class DnsTui
                     case ConsoleKey.I:
                         action = DashboardAction.Import;
                         return;
+
+                    case ConsoleKey.G:
+                        if (_catalog.Entries.Count > 0)
+                        {
+                            action = DashboardAction.Catalog;
+                            return;
+                        }
+                        break;
 
                     case ConsoleKey.T:
                         if (presets.Count > 0)
@@ -613,6 +630,84 @@ public sealed class DnsTui
         catch (Exception ex)
         {
             return new DnsProbeResult(server, null, null, null, ex.Message);
+        }
+    }
+
+    // ---- modal: DNS catalog (optional bulk bundles) ---------------------------
+
+    private void RunCatalogForm()
+    {
+        var accent = new Style(_settings.AccentColor.ToSpectreColor());
+        var filters = new List<string> { "All" };
+        filters.AddRange(_catalog.Entries.Select(e => e.Group).Distinct().OrderBy(g => g == "Global" ? 0 : 1));
+
+        var filterIndex = 0;
+        var index = 0;
+
+        while (true)
+        {
+            var filter = filters[filterIndex];
+            var visible = filter == "All"
+                ? _catalog.Entries.ToList()
+                : _catalog.Entries.Where(e => e.Group == filter).ToList();
+            index = visible.Count == 0 ? 0 : Math.Clamp(index, 0, visible.Count - 1);
+
+            AnsiConsole.Clear();
+            AnsiConsole.Write(DashboardView.BuildCatalogTable(visible, index, filter, _settings, accent));
+
+            var key = Console.ReadKey(intercept: true);
+            switch (key.Key)
+            {
+                case ConsoleKey.UpArrow:
+                    index = Math.Max(0, index - 1);
+                    break;
+
+                case ConsoleKey.DownArrow:
+                    index = Math.Min(Math.Max(0, visible.Count - 1), index + 1);
+                    break;
+
+                case ConsoleKey.LeftArrow:
+                case ConsoleKey.RightArrow:
+                    filterIndex = (filterIndex + (key.Key == ConsoleKey.RightArrow ? 1 : filters.Count - 1)) % filters.Count;
+                    index = 0;
+                    break;
+
+                case ConsoleKey.Enter:
+                    if (visible.Count == 0)
+                        break;
+
+                    var entry = visible[index];
+                    var one = Safe(() => _dnsApp.Create(new CreateDnsObj(entry.Primary, entry.Secondary, entry.Name)));
+                    SetStatus(one);
+                    if (one.IsSucceeded)
+                        AddHistory($"Imported {entry.Name} from catalog");
+                    PromptAnyKey();
+                    return;
+
+                case ConsoleKey.A:
+                {
+                    var imported = 0;
+                    var skipped = 0;
+                    foreach (var item in visible)
+                    {
+                        var create = Safe(() => _dnsApp.Create(new CreateDnsObj(item.Primary, item.Secondary, item.Name)));
+                        if (create.IsSucceeded)
+                            imported++;
+                        else
+                            skipped++;
+                    }
+
+                    _statusMessage = $"catalog import: {imported} added, {skipped} skipped (duplicates)";
+                    _statusIsError = false;
+                    if (imported > 0)
+                        AddHistory($"Imported {imported} presets from catalog ({filter})");
+                    PromptAnyKey();
+                    return;
+                }
+
+                case ConsoleKey.Escape:
+                    return;
+            }
         }
     }
 

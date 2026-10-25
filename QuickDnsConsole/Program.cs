@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using QD.Core.Application;
+using QD.Core.Application.Catalog;
 using QD.Core.Application.Networking;
 using QD.Core.Cotracts.DnsObjContracts;
 using QD.Core.Helper;
@@ -44,7 +45,7 @@ internal static class Program
 
             stopwatch.Stop();
 
-            new DnsTui(dnsApp, adapters, settings, stopwatch.Elapsed, new DnsProbeService(), startupWarning).Run();
+            new DnsTui(dnsApp, adapters, settings, stopwatch.Elapsed, new DnsProbeService(), DnsCatalog.Embedded, startupWarning).Run();
             return 0;
         }
         catch (PlatformNotSupportedException ex)

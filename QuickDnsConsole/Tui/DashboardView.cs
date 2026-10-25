@@ -1,3 +1,4 @@
+using QD.Core.Application.Catalog;
 using QD.Core.Application.Networking;
 using QD.Core.Cotracts.DnsObjContracts;
 using Spectre.Console;
@@ -170,6 +171,7 @@ internal static class DashboardView
             "[b]↑↓[/] select",
             "[b]↵[/] apply",
             "[b]A[/] adapter",
+            "[b]G[/] catalog",
             "[b]C[/] new",
             "[b]E[/] edit",
             "[b]D[/] delete",
@@ -182,6 +184,65 @@ internal static class DashboardView
             "[b]Q[/] quit");
 
         return new Rows(statusLine, new Markup(" " + keys));
+    }
+
+    /// <summary>Catalog browser table for the optional built-in DNS bundles.</summary>
+    public static IRenderable BuildCatalogTable(
+        IReadOnlyList<DnsCatalogEntry> entries,
+        int selectedIndex,
+        string filter,
+        AppSettings settings,
+        Style accent)
+    {
+        var selectedStyle = new Style(
+            settings.HighlightForeground.ToSpectreColor(),
+            settings.HighlightBackground.ToSpectreColor());
+
+        var table = new Table()
+            .Border(TableBorder.Rounded)
+            .BorderStyle(accent)
+            .Expand();
+        table.Title = new TableTitle(
+            $" [bold] DNS catalog [/] [grey]filter: {Markup.Escape(filter)} (←→ change · Enter import one · A import all · Esc close)[/] ", accent);
+        table.AddColumn("[u] [/]");
+        table.AddColumn("[u]Group[/]");
+        table.AddColumn("[u]Name[/]");
+        table.AddColumn("[u]Servers[/]");
+        table.AddColumn("[u]Note[/]");
+
+        if (entries.Count == 0)
+        {
+            table.AddRow(string.Empty, "[grey]nothing in this group[/]", string.Empty, string.Empty, string.Empty);
+            return table;
+        }
+
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var entry = entries[i];
+            var isSelected = i == selectedIndex;
+            var servers = Markup.Escape(string.IsNullOrWhiteSpace(entry.Secondary)
+                ? entry.Primary
+                : $"{entry.Primary} | {entry.Secondary}");
+            var name = Markup.Escape(entry.Name);
+            var group = Markup.Escape(entry.Group);
+            var note = Markup.Escape(entry.Note);
+
+            if (isSelected)
+            {
+                table.AddRow(
+                    new Markup("❯", selectedStyle),
+                    new Markup(group, selectedStyle),
+                    new Markup(name, selectedStyle),
+                    new Markup(servers, selectedStyle),
+                    new Markup(note, selectedStyle));
+            }
+            else
+            {
+                table.AddRow(" ", group, name, servers, note);
+            }
+        }
+
+        return table;
     }
 
     public static IRenderable BuildAdapterPickerTable(
