@@ -146,9 +146,9 @@ Measured on the dev machine (median of 15 warm runs):
 |---|---|---|---|
 | .NET 9, R2R + trimmed | 40 ms | 122 ms | 22.9 MB |
 | **.NET 11, R2R + trimmed** | **25 ms** | **122 ms** | 23.3 MB |
-| .NET 11, NativeAOT (experimental) | measured in CI below | measured in CI below | see CI artifact |
+| **.NET 11, NativeAOT (experimental)** | **8 ms** | **76 ms** | 7.5 MB (exe + e_sqlite3) |
 
-The adapter/store work dominates `--diagnostics`, so that number is workload-bound; pure process boot (the part the .NET version controls) dropped 37%.
+The adapter/store work dominates `--diagnostics`, so that number is workload-bound; pure process boot (the part the .NET version controls) dropped 37% with .NET 11 R2R and 5× with NativeAOT. The AOT artifact is marked experimental: boot, diagnostics and the store are verified, but it has had less real-console mileage than the R2R build, which remains the default download.
 
 ## Project layout
 
@@ -165,7 +165,7 @@ QD.Tests/                    application logic (fakes), SQLite integration, TUI 
 
 ## Version history
 
-- **2.2** — .NET 11 (RC2) upgrade: boot measured 40 ms → 25 ms, runtime services trimmed, experimental NativeAOT build in CI
+- **2.2** — .NET 11 (RC2) upgrade: boot measured 40 ms → 25 ms (R2R) → 8 ms (experimental NativeAOT), runtime services trimmed, size 22.9 MB → 7.5 MB with AOT
 - **2.1** — store redesign (WAL, migrations, self-healing), export/import + auto-backup, crash diagnostics, multi-platform CI (Windows x64/x86/ARM64, Linux x64/ARM64/ARM32/musl)
 - **2.0** — cross-platform rewrite: new TUI, adapter targeting, fast boot, adapter services for Windows & Linux
 
