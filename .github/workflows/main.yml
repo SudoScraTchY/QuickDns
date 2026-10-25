@@ -53,8 +53,7 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           # .NET 11 RC2 until GA (2026-11-10); switch to '11.0.x' after that.
-          dotnet-version: '11.0'
-          dotnet-quality: 'rc'
+          dotnet-version: 11.0.100-rc.2.26504.105
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
@@ -82,8 +81,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '11.0'
-          dotnet-quality: 'rc'
+          dotnet-version: 11.0.100-rc.2.26504.105
 
       - name: Publish NativeAOT
         shell: pwsh
@@ -144,8 +142,7 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           # .NET 11 RC2 until GA (2026-11-10); switch to '11.0.x' after that.
-          dotnet-version: '11.0'
-          dotnet-quality: 'rc'
+          dotnet-version: 11.0.100-rc.2.26504.105
 
       - name: Cache NuGet packages
         uses: actions/cache@v4

@@ -30,15 +30,14 @@ jobs:
       - name: Publish docs to gh-pages
         shell: bash
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           rm -rf site && mkdir site
           cp docs/index.html site/
           touch site/.nojekyll
 
           cd site
           git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           # Reuse the checkout action's persisted credentials for the push.
           auth=$(git -C "$GITHUB_WORKSPACE" config --get http.https://github.com/.extraheader || true)
