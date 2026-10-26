@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QuickDNS, fast DNS switching for Windows and Linux</title>
+<meta name="description" content="QuickDNS is an open-source, keyboard-first DNS switcher for Windows and Linux. Save DNS presets, target any network adapter, switch in one keystroke.">
+<meta property="og:title" content="QuickDNS, fast DNS switching for Windows and Linux">
+<meta property="og:description" content="Keyboard-first DNS switcher for Windows and Linux. Presets, adapter targeting, DNS testing, a built-in catalog of global and Iranian resolvers, bulk import/export.">
+<meta name="theme-color" content="#0b0c10">
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="%230b0c10"/><path d="M8 10l6 6-6 6" stroke="%23ffd21e" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 22h8" stroke="%23ffd21e" stroke-width="3" stroke-linecap="round"/></svg>'>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ========================================================================
+   QuickDNS site. Design read: dev-tool landing page, terminal/mono language.
+   Knobs: VARIANCE 7 / MOTION 4 / DENSITY 4. One accent (amber), locked page-wide.
+   Preview hooks: --zwork-preview-accent / -font-family / -type-scale / -density /
+   -motion / -mode (mode also follows the OS via prefers-color-scheme).
+   ======================================================================== */
+:root{
+  --zwork-preview-accent: initial;
+  --zwork-preview-font-family: initial;
+  --zwork-preview-type-scale: initial;
+  --zwork-preview-density: initial;
+  --zwork-preview-motion: initial;
+
+  --accent: var(--zwork-preview-accent, #ffd21e);
+  --accent-ink: #17140a;              /* text on accent surfaces */
+  --accent-text: var(--accent);       /* dark mode: amber text passes AA */
+  --accent-dim: color-mix(in srgb, var(--accent) 38%, transparent);
+
+  --bg: #0b0c10;
+  --surface: #131418;
+  --surface-2: #191b20;
+  --fg: #e7e7e4;
+  --muted: #a3a29b;
+  --border: #26272c;
+  --border-strong: #3a3c44;
+
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, "JetBrains Mono", monospace;
+  --font-body: var(--zwork-preview-font-family, "IBM Plex Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif);
+
+  --scale: var(--zwork-preview-type-scale, 1);
+  --density: var(--zwork-preview-density, 1);
+  --motion: var(--zwork-preview-motion, 1);
+
+  --section-pad: calc(clamp(4rem, 9vw, 6.5rem) * var(--density));
+  --radius: 10px;                     /* one radius system: soft 10px everywhere */
+  --maxw: 1160px;
+
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light){
+  :root{
+    --bg: #f2f2f2;
+    --surface: #fafafa;
+    --surface-2: #f7f7f6;
+    --fg: #1a1b1f;
+    --muted: #5b5c63;
+    --border: #dcdcd9;
+    --border-strong: #c4c4c0;
+    --accent-text: #7a5f00;           /* amber darkened for AA text on light bg */
+    color-scheme: light;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} }
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--font-body);
+  font-size:calc(1rem * var(--scale));
+  line-height:1.7;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--accent);color:var(--accent-ink)}
+a{color:var(--accent-text);text-decoration:none}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.skip{position:absolute;left:-999px;top:8px;z-index:50;background:var(--accent);color:var(--accent-ink);padding:.5rem 1rem;border-radius:var(--radius);font-family:var(--font-mono)}
+.skip:focus{left:8px}
+.wrap{max-width:var(--maxw);margin-inline:auto;padding-inline:clamp(1.1rem, 4vw, 2rem)}
+.mono{font-family:var(--font-mono)}
+
+/* ---- nav (single line, <=72px, collapses to wordmark + GitHub on small) ---- */
+.nav{position:sticky;top:0;z-index:40;background:var(--bg);background:color-mix(in srgb, var(--bg) 86%, transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+.nav-in{max-width:var(--maxw);margin-inline:auto;padding-inline:clamp(1.1rem, 4vw, 2rem);height:64px;display:flex;align-items:center;gap:1.4rem}
+.mark{display:flex;align-items:center;gap:.6rem;font-family:var(--font-mono);font-weight:600;font-size:1.02rem;color:var(--fg);letter-spacing:-.01em}
+.mark:hover{text-decoration:none}
+.mark svg{width:22px;height:22px}
+.nav-links{display:flex;gap:1.2rem;margin-left:auto}
+.nav-links a{font-family:var(--font-mono);font-size:.86rem;color:var(--muted)}
+.nav-links a:hover{color:var(--fg);text-decoration:none}
+.nav-git{margin-left:auto}
+.nav-links + .nav-git{margin-left:0}
+.nav-git{display:inline-flex;align-items:center;gap:.45rem;border:1px solid var(--border);border-radius:var(--radius);padding:.42rem .8rem;font-family:var(--font-mono);font-size:.86rem;color:var(--fg)}
+.nav-git:hover{border-color:var(--border-strong);text-decoration:none}
+.nav-git svg{width:16px;height:16px}
+@media (max-width:760px){ .nav-links{display:none} .nav-git{margin-left:auto} }
+
+/* ---- buttons ---- */
+.btn{display:inline-flex;align-items:center;gap:.55rem;font-family:var(--font-mono);font-size:.95rem;font-weight:600;padding:.78rem 1.35rem;border-radius:var(--radius);border:1px solid transparent;white-space:nowrap}
+.btn:hover{text-decoration:none}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--accent);color:var(--accent-ink)}
+.btn-primary:hover{filter:brightness(1.06)}
+.btn-ghost{border-color:var(--border-strong);color:var(--fg)}
+.btn-ghost:hover{border-color:var(--accent-text);color:var(--accent-text)}
+.btn svg{width:17px;height:17px}
+
+/* ---- hero ---- */
+.hero{padding-top:clamp(3rem, 7vw, 5.5rem);padding-bottom:var(--section-pad)}
+.hero-grid{display:grid;grid-template-columns:minmax(0, 46fr) minmax(0, 54fr);gap:clamp(2rem, 4vw, 3.2rem);align-items:center}
+@media (max-width:980px){ .hero-grid{grid-template-columns:1fr} }
+.eyebrow{font-family:var(--font-mono);font-size:.8rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+.hero h1{
+  font-family:var(--font-mono);font-weight:600;
+  font-size:clamp(2.1rem, 4.6vw, 3.4rem);
+  line-height:1.08;letter-spacing:-.02em;margin-top:.9rem;
+}
+.hero h1 .u{color:var(--accent-text)}
+.hero .sub{margin-top:1.1rem;max-width:44ch;color:var(--muted)}
+.hero .cta{margin-top:1.7rem;display:flex;gap:.8rem;flex-wrap:wrap}
+
+/* ---- terminal window (faithful miniature of the real dashboard) ---- */
+.term{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow:hidden;box-shadow:0 18px 50px rgb(0 0 0 / .22)}
+.term-bar{display:flex;align-items:center;gap:.5rem;padding:.55rem .9rem;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.term-bar i{width:10px;height:10px;border-radius:50%;background:var(--border-strong)}
+.term-bar span{margin-left:.4rem;font-family:var(--font-mono);font-size:.74rem;color:var(--muted)}
+.term-body{padding:1rem 1.1rem 1.1rem;font-family:var(--font-mono);font-size:.78rem;line-height:1.75;color:var(--muted);overflow-x:auto}
+.term-body .fg{color:var(--fg)}
+.term-body .am{color:var(--accent-text)}
+.term-cols{display:grid;grid-template-columns:11fr 10fr;gap:1.4rem;margin-top:.85rem}
+@media (max-width:560px){ .term-cols{grid-template-columns:1fr} }
+.term-cols pre{white-space:pre;font-family:inherit;margin:0}
+.term-title{color:var(--fg);font-weight:600}
+.term-foot{margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--border)}
+.cursor{display:inline-block;width:.55em;height:1.05em;vertical-align:-.18em;background:var(--accent);margin-left:.15em}
+@media (prefers-reduced-motion: no-preference){
+  .cursor{animation:blink 1.1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+}
+
+/* ---- sections ---- */
+section{padding-block:var(--section-pad);border-top:1px solid var(--border)}
+.sec-head{max-width:60ch}
+.sec-head h2{font-family:var(--font-mono);font-weight:600;font-size:clamp(1.5rem, 2.6vw, 2rem);letter-spacing:-.02em;line-height:1.15}
+.sec-head p{margin-top:.7rem;color:var(--muted)}
+
+/* features: asymmetric grid, varied cells (no three identical cards) */
+.feat-grid{margin-top:2.6rem;display:grid;grid-template-columns:repeat(6, 1fr);gap:1rem}
+.feat{border:1px solid var(--border);border-radius:var(--radius);padding:1.4rem;background:var(--surface)}
+.feat h3{font-family:var(--font-mono);font-size:1.02rem;font-weight:600;display:flex;align-items:center;gap:.6rem}
+.feat p{margin-top:.55rem;color:var(--muted);font-size:.95rem}
+.feat svg{width:19px;height:19px;color:var(--accent-text);flex:none}
+.f-a{grid-column:span 3}
+.f-b{grid-column:span 3}
+.f-c{grid-column:span 2}
+.f-d{grid-column:span 4}
+.f-e{grid-column:span 3}
+.f-f{grid-column:span 3}
+.f-d .backends{margin-top:.9rem;display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
+.f-d .backends div{border:1px solid var(--border);border-radius:var(--radius);padding:.8rem 1rem;background:var(--surface-2)}
+.f-d .backends b{font-family:var(--font-mono);font-size:.85rem;color:var(--fg);display:block}
+.f-d .backends span{font-size:.85rem;color:var(--muted)}
+@media (max-width:760px){
+  .f-a,.f-b{grid-column:span 6}
+  .f-c{grid-column:span 6}
+  .f-d{grid-column:span 6}
+  .f-e,.f-f{grid-column:span 6}
+  .f-d .backends{grid-template-columns:1fr}
+}
+
+/* download matrix */
+.dl-grid{margin-top:2.6rem;display:grid;grid-template-columns:1fr 1fr;gap:2.2rem}
+@media (max-width:760px){ .dl-grid{grid-template-columns:1fr} }
+.dl-group h3{font-family:var(--font-mono);font-size:.95rem;font-weight:600;display:flex;align-items:center;gap:.6rem}
+.dl-group h3 svg{width:18px;height:18px;color:var(--accent-text)}
+.dl-rows{margin-top:.9rem;border-top:1px solid var(--border)}
+.dl-row{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;padding:.72rem .2rem;border-bottom:1px solid var(--border)}
+.dl-row a{font-family:var(--font-mono);font-size:.9rem;font-weight:500}
+.dl-row span{font-size:.85rem;color:var(--muted);text-align:right}
+.dl-note{margin-top:1.6rem;color:var(--muted);font-size:.92rem;max-width:70ch}
+.dl-note code{font-family:var(--font-mono);font-size:.85em;color:var(--fg);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.1rem .35rem}
+
+/* usage */
+.use-grid{margin-top:2.6rem;display:grid;grid-template-columns:minmax(0, 5fr) minmax(0, 6fr);gap:2.4rem;align-items:start}
+@media (max-width:860px){ .use-grid{grid-template-columns:1fr} }
+.keys{border-top:1px solid var(--border)}
+.key-row{display:flex;align-items:baseline;gap:1rem;padding:.6rem .1rem;border-bottom:1px solid var(--border)}
+.key-row kbd{font-family:var(--font-mono);font-size:.78rem;color:var(--fg);background:var(--surface-2);border:1px solid var(--border-strong);border-bottom-width:2px;border-radius:6px;padding:.14rem .5rem;white-space:nowrap}
+.key-row span{color:var(--muted);font-size:.92rem}
+.cli{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:1.2rem 1.3rem;overflow-x:auto}
+.cli pre{font-family:var(--font-mono);font-size:.82rem;line-height:1.9;color:var(--muted);white-space:pre}
+.cli .c{color:var(--accent-text)}
+.cli .f{color:var(--fg)}
+.cli .hint{margin-top:.9rem;padding-top:.9rem;border-top:1px solid var(--border);font-size:.8rem;line-height:1.7}
+
+/* data safety: three rows, hairline dividers, no cards */
+.safe{margin-top:2.2rem;border-top:1px solid var(--border)}
+.safe-row{display:grid;grid-template-columns:minmax(0, 3fr) minmax(0, 7fr);gap:1.2rem;padding:1.15rem .1rem;border-bottom:1px solid var(--border)}
+.safe-row b{font-family:var(--font-mono);font-size:.95rem;font-weight:600;color:var(--accent-text)}
+.safe-row p{color:var(--muted);font-size:.95rem}
+@media (max-width:640px){ .safe-row{grid-template-columns:1fr;gap:.3rem} }
+
+/* footer */
+footer{border-top:1px solid var(--border);padding:2.4rem 0 3rem}
+.foot-in{max-width:var(--maxw);margin-inline:auto;padding-inline:clamp(1.1rem, 4vw, 2rem);display:flex;flex-wrap:wrap;gap:1rem 2.2rem;align-items:baseline;justify-content:space-between}
+.foot-in .mark{font-size:.95rem}
+.foot-links{display:flex;gap:1.4rem;font-family:var(--font-mono);font-size:.85rem}
+.foot-note{max-width:var(--maxw);margin-inline:auto;padding:1rem clamp(1.1rem, 4vw, 2rem) 0;font-family:var(--font-mono);font-size:.75rem;color:var(--muted)}
+
+/* motion: one orchestrated load, gated; nothing runs under reduced motion */
+@media (prefers-reduced-motion: no-preference){
+  .rise{opacity:0;transform:translateY(14px);animation:rise .65s cubic-bezier(.16,1,.3,1) both}
+  .rise:nth-of-type(1){animation-delay:.02s}
+  .hero .rise.d1{animation-delay:.08s}
+  .hero .rise.d2{animation-delay:.16s}
+  .hero .rise.d3{animation-delay:.24s}
+  .hero .term.rise{animation-delay:.3s}
+  @keyframes rise{to{opacity:1;transform:none}}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="nav-in">
+    <a class="mark" href="#top">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M8 10l6 6-6 6M16 22h8" stroke="#17140a" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      QuickDNS
+    </a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#features">Features</a>
+      <a href="#download">Download</a>
+      <a href="#usage">Usage</a>
+      <a href="#safety">Your data</a>
+    </nav>
+    <a class="nav-git" href="https://github.com/SudoScraTchY/QuickDns">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.7 5.6.7 11.9c0 5 3.2 9.3 7.7 10.8.6.1.8-.2.8-.6v-2c-3.1.7-3.8-1.3-3.8-1.3-.5-1.3-1.2-1.7-1.2-1.7-1-.7.1-.7.1-.7 1.1.1 1.7 1.2 1.7 1.2 1 1.7 2.6 1.2 3.2.9.1-.7.4-1.2.7-1.5-2.5-.3-5.1-1.3-5.1-5.6 0-1.2.4-2.2 1.1-3-.1-.3-.5-1.4.1-3 0 0 1-.3 3.1 1.2a10.7 10.7 0 0 1 5.7 0c2.2-1.5 3.1-1.2 3.1-1.2.6 1.6.2 2.7.1 3 .7.8 1.1 1.8 1.1 3 0 4.4-2.6 5.3-5.1 5.6.4.4.8 1 .8 2.1v3.1c0 .4.2.7.8.6a11.3 11.3 0 0 0 7.6-10.8C23.3 5.6 18.3.5 12 .5z"/></svg>
+      GitHub
+    </a>
+  </div>
+</header>
+
+<main id="main">
+<!-- hero: asymmetric split, faithful terminal miniature on the right -->
+<section class="hero" id="top" style="border-top:none">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="eyebrow rise d1">Open source · Windows &amp; Linux</p>
+      <h1 class="rise d2">DNS presets at <span class="u">keyboard speed.</span></h1>
+      <p class="sub rise d2">Save the DNS presets you trust, target any adapter, and switch in one keystroke. No installer, no mouse.</p>
+      <div class="cta rise d3">
+        <a class="btn btn-primary" href="https://github.com/SudoScraTchY/QuickDns/releases/tag/latest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+          Download latest
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/SudoScraTchY/QuickDns">View source</a>
+      </div>
+    </div>
+
+    <div class="term rise" role="img" aria-label="The QuickDNS dashboard: a preset list on the left, target adapter details on the right, and a keybar at the bottom.">
+      <div class="term-bar" aria-hidden="true"><i></i><i></i><i></i><span>QuickDNS 2.4.0</span></div>
+      <div class="term-body">
+        <div><span class="fg"> Adapter</span>  Ethernet · Realtek PCIe GbE Family Controller · <span class="am">● Up</span></div>
+        <div><span class="fg"> IP</span>       192.168.1.4</div>
+        <div><span class="fg"> DNS</span>      <span class="am">1.1.1.1 | 1.0.0.1</span>  Cloudflare</div>
+        <div class="term-cols">
+<pre><span class="term-title"> DNS Presets</span>
+
+   <span class="am">●</span> Cloudflare   1.1.1.1 | 1.0.0.1
+ <span class="am">❯</span>   Google       8.8.8.8 | 8.8.4.4
+     Quad9        9.9.9.9 | 149.112.112.112
+     OpenDNS      208.67.222.222 | 208.67.220.220
+     AdGuard      94.140.14.14 | 94.140.15.15</pre>
+<pre><span class="term-title"> Target adapter</span>
+
+ Type       Ethernet
+ Status     Up
+ Interface  12
+ Addresses  192.168.1.4
+ Gateway    192.168.1.1
+ DNS        1.1.1.1, 1.0.0.1</pre>
+        </div>
+        <div class="term-foot">
+          <div><span class="am">done:</span> <span class="fg">applied 'Google' → 8.8.8.8 | 8.8.4.4</span></div>
+          <div><span class="fg">↑↓</span> select  <span class="fg">↵</span> apply  <span class="fg">A</span> adapter  <span class="fg">G</span> catalog  <span class="fg">C</span> new  <span class="fg">E</span> edit  <span class="fg">D</span> delete  <span class="fg">U</span> unset  <span class="fg">X</span> export  <span class="fg">I</span> import  <span class="fg">T</span> test  <span class="fg">B</span> bench  <span class="fg">R</span> refresh  <span class="fg">Q</span> quit<span class="cursor" aria-hidden="true"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- features: asymmetric grid, one wide cell shows both platform backends -->
+<section id="features">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Built like a tool, not a tray app.</h2>
+      <p>A console program with one job: change DNS fast, on the adapter you choose, without getting in your way.</p>
+    </div>
+    <div class="feat-grid">
+      <div class="feat f-a">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg>Target any adapter</h3>
+        <p>Pick Ethernet or Wi-Fi explicitly, or leave Auto to choose the adapter that is up with an IPv4 gateway. Your choice is remembered.</p>
+      </div>
+      <div class="feat f-b">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>Boots in milliseconds</h3>
+        <p>No framework, no sleeps, no startup scans. The dashboard is ready in about 130 ms, measured on the dev machine.</p>
+      </div>
+      <div class="feat f-c">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.7 8.9a.7.7 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/></svg>Update-proof list</h3>
+        <p>Presets live in your user profile with a silent auto-backup and a self-healing store.</p>
+      </div>
+      <div class="feat f-d">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>One muscle memory, two platforms</h3>
+        <p>Same keys everywhere. QuickDNS picks the right mechanism per system, automatically:</p>
+        <div class="backends">
+          <div><b>Windows</b><span>WMI, applied through a scoped adapter query. Admin required.</span></div>
+          <div><b>Linux</b><span>NetworkManager (persistent), resolvectl, or resolv.conf fallback. Auto-detected.</span></div>
+        </div>
+      </div>
+      <div class="feat f-e">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Test before you trust</h3>
+        <p>ICMP ping, a real DNS query over UDP 53 and a TCP probe for any preset or server, plus a one-key benchmark across all of them.</p>
+      </div>
+      <div class="feat f-f">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>A curated DNS catalog</h3>
+        <p>An optional bulk file of free resolvers: global providers and Iranian ones like Shecan, Shatel, Electro, Begzar, Radar Game and 403.online. Import one or all.</p>
+      </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- download: real asset links to the rolling latest release -->
+<section id="download">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Download</h2>
+      <p>Self-contained single-file executables. No .NET install, no installer. Every zip ships with a SHA256 checksum file.</p>
+    </div>
+    <div class="dl-grid">
+      <div class="dl-group">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Windows</h3>
+        <div class="dl-rows">
+          <div class="dl-row"><a href="https://github.com/SudoScraTchY/QuickDns/releases/download/latest/QuickDNS-win-x64.zip">QuickDNS-win-x64.zip</a><span>Windows 10/11, 64-bit</span></div>
+          <div class="dl-row"><a href="https://github.com/SudoScraTchY/QuickDns/releases/download/latest/QuickDNS-win-x86.zip">QuickDNS-win-x86.zip</a><span>32-bit x86</span></div>
+          <div class="dl-row"><a href="https://github.com/SudoScraTchY/QuickDns/releases/download/latest/QuickDNS-win-arm64.zip">QuickDNS-win-arm64.zip</a><span>Windows on ARM</span></div>
+        </div>
+      </div>
+      <div class="dl-group">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22c5.2 0 9.5-4 9.5-8.9 0-3.2-2.7-5.6-6.6-5.6-2.3 0-4.3.9-5.4 2.3"/><path d="M9.4 9.6C8 10.9 7 12.7 7 14.7c0 4 2.6 7.3 5 7.3"/></svg>Linux</h3>
+        <div class="dl-rows">
+          <div class="dl-row"><a href="https://github.com/SudoScraTchY/QuickDns/releases/download/latest/QuickDNS-linux-x64.zip">QuickDNS-linux-x64.zip</a><span>glibc, x64</span></div>
+          <div class="dl-row"><a href="https://github.com/SudoScraTchY/QuickDns/releases/download/latest/QuickDNS-linux-arm64.zip">QuickDNS-linux-arm64.zip</a><span>glibc, ARM64</span></div>
+          <div class="dl-row"><a href="https://github.com/SudoScraTchY/QuickDns/releases/download/latest/QuickDNS-linux-arm.zip">QuickDNS-linux-arm.zip</a><span>glibc, ARM32</span></div>
+          <div class="dl-row"><a href="https://github.com/SudoScraTchY/QuickDns/releases/download/latest/QuickDNS-linux-musl-x64.zip">QuickDNS-linux-musl-x64.zip</a><span>Alpine, x64</span></div>
+          <div class="dl-row"><a href="https://github.com/SudoScraTchY/QuickDns/releases/download/latest/QuickDNS-linux-musl-arm64.zip">QuickDNS-linux-musl-arm64.zip</a><span>Alpine, ARM64</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="dl-note">Unzip, run <code>QuickDNS</code> (or <code>QuickDNS.exe</code>). Changing DNS needs elevation: administrator on Windows, <code>sudo</code> on Linux. macOS is not supported yet, so no macOS builds are shipped. Building from source needs the .NET 11 SDK; see the README in the repository.</p>
+  </div>
+</section>
+
+<!-- usage: key table + CLI, faithful to the app -->
+<section id="usage">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Usage</h2>
+      <p>The dashboard answers to the keyboard. Scripts get flags. Esc cancels anything, anywhere.</p>
+    </div>
+    <div class="use-grid">
+      <div>
+        <div class="keys">
+          <div class="key-row"><kbd>↑ ↓</kbd><span>Select a preset</span></div>
+          <div class="key-row"><kbd>Enter</kbd><span>Apply it to the target adapter</span></div>
+          <div class="key-row"><kbd>A</kbd><span>Choose the target adapter, or Auto</span></div>
+          <div class="key-row"><kbd>C / E / D</kbd><span>Create, edit, delete presets</span></div>
+          <div class="key-row"><kbd>U</kbd><span>Clear DNS, back to automatic (DHCP)</span></div>
+          <div class="key-row"><kbd>X / I</kbd><span>Export or import your preset list</span></div>
+          <div class="key-row"><kbd>G</kbd><span>Open the DNS catalog: global + Iranian free resolvers, import one or all</span></div>
+          <div class="key-row"><kbd>T</kbd><span>Test the selected preset: ping, DNS speed, reachability</span></div>
+          <div class="key-row"><kbd>B</kbd><span>Benchmark all presets and sort by DNS speed</span></div>
+          <div class="key-row"><kbd>R</kbd><span>Refresh adapter and DNS state</span></div>
+          <div class="key-row"><kbd>Q</kbd><span>Quit</span></div>
+        </div>
+      </div>
+      <div class="cli">
+        <pre><span class="f">QuickDNS</span>                        <span class="c"># launch the dashboard</span>
+<span class="f">QuickDNS</span> --diagnostics           <span class="c"># read-only health report</span>
+<span class="f">QuickDNS</span> --export [path]         <span class="c"># presets to portable JSON</span>
+<span class="f">QuickDNS</span> --export-csv [path]     <span class="c"># presets to CSV (name,primary,secondary)</span>
+<span class="f">QuickDNS</span> --import &lt;path&gt;         <span class="c"># import JSON or line format, duplicates skipped</span>
+<span class="f">QuickDNS</span> --test &lt;name|ip&gt;        <span class="c"># ping, DNS speed, reachability probe</span>
+<span class="c"># built-in DNS catalog: press G in the dashboard (global + Iranian resolvers)</span>
+<span class="f">QuickDNS</span> --version | --help
+
+<span class="c"># presets live in your profile:</span>
+<span class="c">#   Windows  %APPDATA%\QuickDns\</span>
+<span class="c">#   Linux    ~/.config/QuickDns/</span>
+<span class="hint">Every clean start refreshes a silent backup. If the store is ever damaged, it is quarantined and rebuilt from that backup automatically, so an update can never wipe your list.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- data safety: three honest rows -->
+<section id="safety">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Your DNS list survives everything.</h2>
+      <p>Updates, reinstalls, even a corrupted database. Three independent safety nets, no configuration required.</p>
+    </div>
+    <div class="safe">
+      <div class="safe-row">
+        <b>Lives in your profile</b>
+        <p>Presets are stored per user, away from the executable. Installing a new version never touches them.</p>
+      </div>
+      <div class="safe-row">
+        <b>Backs itself up</b>
+        <p>Every clean start silently refreshes a JSON backup of your whole preset list.</p>
+      </div>
+      <div class="safe-row">
+        <b>Heals when broken</b>
+        <p>If the database is ever damaged, it is quarantined, a fresh one is created, and the backup is restored into it on the next start.</p>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="foot-in">
+    <a class="mark" href="#top">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M8 10l6 6-6 6M16 22h8" stroke="#17140a" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      QuickDNS
+    </a>
+    <div class="foot-links">
+      <a href="https://github.com/SudoScraTchY/QuickDns">GitHub</a>
+      <a href="https://github.com/SudoScraTchY/QuickDns/releases/tag/latest">Releases</a>
+      <a href="https://github.com/SudoScraTchY/QuickDns/issues">Issues</a>
+    </div>
+  </div>
+  <p class="foot-note">A console DNS switcher built with .NET 11 and Spectre.Console. The terminal panel above shows the real dashboard output.</p>
+</footer>
+</body>
+</html>
