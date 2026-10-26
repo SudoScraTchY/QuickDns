@@ -6,7 +6,7 @@
 <title>QuickDNS, fast DNS switching for Windows and Linux</title>
 <meta name="description" content="QuickDNS is an open-source, keyboard-first DNS switcher for Windows and Linux. Save DNS presets, target any network adapter, switch in one keystroke.">
 <meta property="og:title" content="QuickDNS, fast DNS switching for Windows and Linux">
-<meta property="og:description" content="Keyboard-first DNS switcher for Windows and Linux. Presets, adapter targeting, export/import, self-healing store.">
+<meta property="og:description" content="Keyboard-first DNS switcher for Windows and Linux. Presets, adapter targeting, DNS testing, a built-in catalog of global and Iranian resolvers, bulk import/export.">
 <meta name="theme-color" content="#0b0c10">
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="%230b0c10"/><path d="M8 10l6 6-6 6" stroke="%23ffd21e" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 22h8" stroke="%23ffd21e" stroke-width="3" stroke-linecap="round"/></svg>'>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -160,6 +160,8 @@ section{padding-block:var(--section-pad);border-top:1px solid var(--border)}
 .f-b{grid-column:span 3}
 .f-c{grid-column:span 2}
 .f-d{grid-column:span 4}
+.f-e{grid-column:span 3}
+.f-f{grid-column:span 3}
 .f-d .backends{margin-top:.9rem;display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
 .f-d .backends div{border:1px solid var(--border);border-radius:var(--radius);padding:.8rem 1rem;background:var(--surface-2)}
 .f-d .backends b{font-family:var(--font-mono);font-size:.85rem;color:var(--fg);display:block}
@@ -168,6 +170,7 @@ section{padding-block:var(--section-pad);border-top:1px solid var(--border)}
   .f-a,.f-b{grid-column:span 6}
   .f-c{grid-column:span 6}
   .f-d{grid-column:span 6}
+  .f-e,.f-f{grid-column:span 6}
   .f-d .backends{grid-template-columns:1fr}
 }
 
@@ -321,6 +324,15 @@ footer{border-top:1px solid var(--border);padding:2.4rem 0 3rem}
           <div><b>Linux</b><span>NetworkManager (persistent), resolvectl, or resolv.conf fallback. Auto-detected.</span></div>
         </div>
       </div>
+      <div class="feat f-e">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Test before you trust</h3>
+        <p>ICMP ping, a real DNS query over UDP 53 and a TCP probe for any preset or server, plus a one-key benchmark across all of them.</p>
+      </div>
+      <div class="feat f-f">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>A curated DNS catalog</h3>
+        <p>An optional bulk file of free resolvers: global providers and Iranian ones like Shecan, Shatel, Electro, Begzar, Radar Game and 403.online. Import one or all.</p>
+      </div>
+      </div>
     </div>
   </div>
 </section>
@@ -372,6 +384,9 @@ footer{border-top:1px solid var(--border);padding:2.4rem 0 3rem}
           <div class="key-row"><kbd>C / E / D</kbd><span>Create, edit, delete presets</span></div>
           <div class="key-row"><kbd>U</kbd><span>Clear DNS, back to automatic (DHCP)</span></div>
           <div class="key-row"><kbd>X / I</kbd><span>Export or import your preset list</span></div>
+          <div class="key-row"><kbd>G</kbd><span>Open the DNS catalog: global + Iranian free resolvers, import one or all</span></div>
+          <div class="key-row"><kbd>T</kbd><span>Test the selected preset: ping, DNS speed, reachability</span></div>
+          <div class="key-row"><kbd>B</kbd><span>Benchmark all presets and sort by DNS speed</span></div>
           <div class="key-row"><kbd>R</kbd><span>Refresh adapter and DNS state</span></div>
           <div class="key-row"><kbd>Q</kbd><span>Quit</span></div>
         </div>
@@ -431,7 +446,7 @@ footer{border-top:1px solid var(--border);padding:2.4rem 0 3rem}
       <a href="https://github.com/SudoScraTchY/QuickDns/issues">Issues</a>
     </div>
   </div>
-  <p class="foot-note">A console DNS switcher built with .NET and Spectre.Console. The terminal panel above shows the real dashboard output.</p>
+  <p class="foot-note">A console DNS switcher built with .NET 11 and Spectre.Console. The terminal panel above shows the real dashboard output.</p>
 </footer>
 </body>
 </html>

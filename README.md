@@ -7,7 +7,7 @@ Pick a saved DNS preset, pick an adapter, press Enter — done. One self-contain
 [![Project website](https://img.shields.io/badge/project%20website-sudoscratchy.github.io%2FQuickDns-0b0c10)](https://sudoscratchy.github.io/QuickDNS/)
 
 ```
-╭─ QuickDNS v2.1.0 ──────────────────────────────────────────────────────────╮
+╭─ QuickDNS v2.4.0 ──────────────────────────────────────────────────────────╮
 │ Adapter  Ethernet · Realtek PCIe GbE Family Controller · ● Up              │
 │ IP       192.168.1.4                                                       │
 │ DNS      1.1.1.1 | 1.0.0.1  Cloudflare                                     │
@@ -20,7 +20,7 @@ Pick a saved DNS preset, pick an adapter, press Enter — done. One self-contain
 │     AdGuard     94.140…     │ │ Backend    WMI (…SetDNSServerSearchOrder)  │
 ╰─────────────────────────────╯ ╰────────────────────────────────────────────╯
  done: applied 'Google' → 8.8.8.8 | 8.8.4.4
- ↑↓ select  ↵ apply  A adapter  C new  E edit  D delete  U unset  X export  I import  R refresh  Q quit
+ ↑↓ select  ↵ apply  A adapter  G catalog  C new  E edit  D delete  U unset  X export  I import  T test  B bench  R refresh  Q quit
 ```
 
 ## Features
@@ -162,13 +162,15 @@ The adapter/store work dominates `--diagnostics`, so that number is workload-bou
 
 ```
 QD.Core/
-  Application/Networking/    adapter abstraction: Windows (WMI) + Linux (nmcli/resolvectl) services
-  Application/               preset CRUD, adapter-aware apply/clear, export/import
+  Application/Networking/    adapter services (Windows WMI, Linux nmcli/resolvectl) + DNS probe (ping, speed, reachability)
+  Application/Catalog/       built-in DNS catalog (embedded bulk file: global + Iranian resolvers)
+  Application/               preset CRUD, adapter-aware apply/clear, bulk export/import
   Infrastructure/SQLite/     store: schema, WAL, migrations, corruption quarantine
+  Resources/                 dns-catalog.json (the embedded catalog file)
 QuickDnsConsole/
   Program.cs                 composition root, CLI, crash log
   Tui/                       dashboard state machine, renderables, input
-QD.Tests/                    application logic (fakes), SQLite integration, TUI rendering
+QD.Tests/                    application logic (fakes), SQLite integration, probes, catalog, TUI rendering
 ```
 
 ## Version history
