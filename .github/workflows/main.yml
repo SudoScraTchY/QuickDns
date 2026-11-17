@@ -315,7 +315,10 @@ jobs:
           make_latest: "true"
           fail_on_unmatched_files: true
 
-      # Push to main: refresh the rolling "latest" prerelease (stable asset names).
+      # Push to main: refresh the rolling "latest" release (stable asset names).
+      # It must NOT be a prerelease: GitHub's latest-release definition — and therefore
+      # the permanent /releases/latest/download/<asset> direct links used by the README
+      # and website — only ever resolves against non-prerelease releases.
       - name: Refresh rolling latest build
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
@@ -323,7 +326,7 @@ jobs:
           tag_name: latest
           name: "QuickDNS Latest Build (rolling)"
           body_path: release-body.md
-          prerelease: true
+          prerelease: false
           make_latest: "true"
           files: dist/*
           fail_on_unmatched_files: true
@@ -331,8 +334,8 @@ jobs:
       # GitHub's "Latest" flag is what powers the permanent
       # /releases/latest/download/<asset> direct links (README + website). The
       # release action's make_latest input is not applied reliably on the update
-      # path (release already exists), so PATCH it explicitly. A prerelease CAN
-      # be marked Latest; the newest marked release always wins.
+      # path (release already exists), so PATCH it explicitly. Non-fatal: a
+      # warning is emitted if GitHub rejects the flag.
       - name: Mark release as Latest (keeps direct links alive)
         if: >-
           startsWith(github.ref, 'refs/tags/v') ||
@@ -341,20 +344,23 @@ jobs:
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             TAG="${GITHUB_REF_NAME}"
+            BODY='{"make_latest":"true"}'
           else
             TAG="latest"
+            BODY='{"make_latest":"true","prerelease":false,"draft":false}'
           fi
           release_id=$(curl -sf -H "Authorization: Bearer ${{ github.token }}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" | jq -r '.id')
           if [ -n "$release_id" ] && [ "$release_id" != "null" ]; then
-            curl -sf -X PATCH \
+            curl -s -X PATCH \
               -H "Authorization: Bearer ${{ github.token }}" \
               -H "Accept: application/vnd.github+json" \
               -H "Content-Type: application/json" \
-              -d '{"make_latest":"true"}' \
-              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/$release_id" > /dev/null
-            echo "Release $release_id (tag $TAG) marked as Latest."
+              -d "$BODY" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/$release_id" > /dev/null \
+              || echo "::warning::Could not mark release $release_id as Latest."
+            echo "Release $release_id (tag $TAG) processed."
           else
             echo "::warning::No release found for tag $TAG; nothing marked as Latest."
           fi
