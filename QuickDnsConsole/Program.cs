@@ -164,7 +164,9 @@ internal static class Program
         var repository = new DnsObjRepository(database);
         var adapters = NetworkAdapterServiceFactory.Create();
         IDnsObjApplication app = new DnsObjApplication(repository, adapters);
-        var routeManager = new RouteModeManager(new DnsRouteRepository(database), app, adapters);
+        var routeRepository = new DnsRouteRepository(database);
+        var routeManager = new RouteModeManager(routeRepository, app, adapters);
+        PresetSeeder.SeedFallbackRouteIfEmpty(routeRepository, repository);
 
         if (quarantined)
         {

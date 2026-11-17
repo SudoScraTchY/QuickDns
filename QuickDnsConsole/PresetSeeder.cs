@@ -1,4 +1,5 @@
 using QD.Core.Domain.DnsObj;
+using QD.Core.Domain.DnsRoute;
 
 namespace QuickDNSConsole;
 
@@ -21,5 +22,24 @@ public static class PresetSeeder
 
         foreach (var (name, primary, secondary) in Defaults)
             repository.Create(name, primary, secondary);
+    }
+
+    /// <summary>
+    /// Seeds the route-mode fallback rule (<c>*</c> → Cloudflare) when the route table is
+    /// empty and the referenced preset exists — so <c>--route-start</c> works out of the box
+    /// on a fresh install instead of refusing with "no route rules". One-time, idempotent:
+    /// any user-created rules (including a different fallback) disable it forever.
+    /// </summary>
+    public static void SeedFallbackRouteIfEmpty(IDnsRouteRepository routes, IDnsObjRepository presets)
+    {
+        if (routes.Count() > 0 || presets.Count() == 0)
+            return;
+
+        var cloudflare = presets.GetAll().FirstOrDefault(p => p.Name == "Cloudflare")
+            ?? presets.GetAll().FirstOrDefault();
+        if (cloudflare is null)
+            return;
+
+        routes.Create("*", cloudflare.Id);
     }
 }

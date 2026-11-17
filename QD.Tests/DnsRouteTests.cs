@@ -1,5 +1,6 @@
 using QD.Core.Application.Routing;
 using QD.Core.Infrastructure.SQLite;
+using QuickDNSConsole;
 
 namespace QD.Tests;
 
@@ -154,6 +155,27 @@ public sealed class DnsRouteRepositoryTests : IDisposable
 
         // Unique index rejects a second identical pattern (case-insensitive).
         Assert.ThrowsAny<Exception>(() => routes.Create("example.com", preset.Id));
+    }
+
+    [Fact]
+    public void SeedFallbackRouteIfEmpty_CreatesStarRule_Once()
+    {
+        var (routes, presets) = OpenStores();
+        presets.Create("Cloudflare", "1.1.1.1", "1.0.0.1");
+        presets.Create("Google", "8.8.8.8", "8.8.4.4");
+
+        PresetSeeder.SeedFallbackRouteIfEmpty(routes, presets);
+        PresetSeeder.SeedFallbackRouteIfEmpty(routes, presets); // idempotent
+
+        Assert.Equal(1, routes.Count());
+        var fallback = routes.GetAll().Single();
+        Assert.Equal("*", fallback.Pattern);
+        Assert.Equal("Cloudflare", presets.FindById(fallback.PresetId)?.Name);
+
+        // User-created rules disable the default seeding forever.
+        routes.Create("*.ir", presets.GetAll().First(p => p.Name != "Cloudflare").Id);
+        PresetSeeder.SeedFallbackRouteIfEmpty(routes, presets);
+        Assert.Equal(2, routes.Count());
     }
 
     [Fact]
