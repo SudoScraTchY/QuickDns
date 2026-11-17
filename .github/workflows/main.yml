@@ -132,19 +132,22 @@ jobs:
       matrix:
         include:
           # Self-contained single-file builds: run on a bare OS, no .NET needed.
-          - { os: windows-latest, rid: win-x64,             artifact: QuickDNS-win-x64,             mode: full }
-          - { os: windows-latest, rid: win-x86,             artifact: QuickDNS-win-x86,             mode: full }
-          - { os: windows-latest, rid: win-arm64,           artifact: QuickDNS-win-arm64,           mode: full }
-          - { os: ubuntu-latest,  rid: linux-x64,           artifact: QuickDNS-linux-x64,           mode: full }
-          - { os: ubuntu-latest,  rid: linux-arm64,         artifact: QuickDNS-linux-arm64,         mode: full }
-          - { os: ubuntu-latest,  rid: linux-arm,           artifact: QuickDNS-linux-arm,           mode: full }
-          - { os: ubuntu-latest,  rid: linux-musl-x64,      artifact: QuickDNS-linux-musl-x64,      mode: full }
-          - { os: ubuntu-latest,  rid: linux-musl-arm64,    artifact: QuickDNS-linux-musl-arm64,    mode: full }
+          # smoke: only true where the produced binary can execute on the runner
+          # (an x64/x86 runner cannot run arm64/arm/musl binaries — CI smoke would
+          # fail on runnable-vs-not, not on the build itself).
+          - { os: windows-latest, rid: win-x64,             artifact: QuickDNS-win-x64,             mode: full, smoke: true }
+          - { os: windows-latest, rid: win-x86,             artifact: QuickDNS-win-x86,             mode: full, smoke: true }
+          - { os: windows-latest, rid: win-arm64,           artifact: QuickDNS-win-arm64,           mode: full, smoke: false }
+          - { os: ubuntu-latest,  rid: linux-x64,           artifact: QuickDNS-linux-x64,           mode: full, smoke: true }
+          - { os: ubuntu-latest,  rid: linux-arm64,         artifact: QuickDNS-linux-arm64,         mode: full, smoke: false }
+          - { os: ubuntu-latest,  rid: linux-arm,           artifact: QuickDNS-linux-arm,           mode: full, smoke: false }
+          - { os: ubuntu-latest,  rid: linux-musl-x64,      artifact: QuickDNS-linux-musl-x64,      mode: full, smoke: false }
+          - { os: ubuntu-latest,  rid: linux-musl-arm64,    artifact: QuickDNS-linux-musl-arm64,    mode: full, smoke: false }
           # Framework-dependent builds: tiny download for machines that already have the .NET 11 runtime.
-          - { os: windows-latest, rid: win-x64,             artifact: QuickDNS-win-x64-fd,          mode: fd }
-          - { os: windows-latest, rid: win-arm64,           artifact: QuickDNS-win-arm64-fd,        mode: fd }
-          - { os: ubuntu-latest,  rid: linux-x64,           artifact: QuickDNS-linux-x64-fd,        mode: fd }
-          - { os: ubuntu-latest,  rid: linux-arm64,         artifact: QuickDNS-linux-arm64-fd,      mode: fd }
+          - { os: windows-latest, rid: win-x64,             artifact: QuickDNS-win-x64-fd,          mode: fd,   smoke: true }
+          - { os: windows-latest, rid: win-arm64,           artifact: QuickDNS-win-arm64-fd,        mode: fd,   smoke: false }
+          - { os: ubuntu-latest,  rid: linux-x64,           artifact: QuickDNS-linux-x64-fd,        mode: fd,   smoke: true }
+          - { os: ubuntu-latest,  rid: linux-arm64,         artifact: QuickDNS-linux-arm64-fd,      mode: fd,   smoke: false }
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -209,7 +212,9 @@ jobs:
 
       # Catches regressions early: the binary must boot, diagnose itself, and the
       # built-in CLI integration must install and uninstall cleanly on a fresh machine.
+      # Only on RIDs the runner can actually execute (see the smoke matrix column).
       - name: Smoke test
+        if: matrix.smoke == true
         shell: bash
         run: |
           EXE="publish/${{ matrix.artifact }}/QuickDNSConsole"
