@@ -180,6 +180,8 @@ internal static class DashboardView
             "[b]I[/] import",
             "[b]T[/] test",
             "[b]B[/] bench",
+            "[b]V[/] verify",
+            "[b]S[/] setup cli",
             "[b]R[/] refresh",
             "[b]Q[/] quit");
 

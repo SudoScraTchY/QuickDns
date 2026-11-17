@@ -4,7 +4,7 @@ namespace QD.Core.Application.Networking;
 
 /// <summary>
 /// Platform facade for enumerating network adapters and applying/clearing DNS on a chosen one.
-/// Implementations: <see cref="WindowsNetworkAdapterService"/> (WMI) and
+/// Implementations: <see cref="WindowsNetworkAdapterService"/> (netsh) and
 /// <see cref="LinuxNetworkAdapterService"/> (nmcli / resolvectl / resolv.conf).
 /// </summary>
 public interface INetworkAdapterService

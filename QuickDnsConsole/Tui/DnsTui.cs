@@ -20,6 +20,8 @@ internal enum DashboardAction
     Test,
     Benchmark,
     Catalog,
+    Verify,
+    CliSetup,
 }
 
 /// <summary>
@@ -66,6 +68,13 @@ public sealed class DnsTui
 
     public void Run()
     {
+        // One-time nudge: when the 'quickdns' command is not installed yet, point at Setup.
+        if (_statusMessage is null && !CliIntegration.GetStatus().FullyInstalled)
+        {
+            _statusMessage = "Tip: press S to make 'quickdns' callable from any terminal";
+            _statusIsError = false;
+        }
+
         while (true)
         {
             var presets = FetchPresets();
@@ -105,6 +114,14 @@ public sealed class DnsTui
 
                 case DashboardAction.Catalog:
                     RunCatalogForm();
+                    continue;
+
+                case DashboardAction.Verify:
+                    RunVerifyForm(presets);
+                    continue;
+
+                case DashboardAction.CliSetup:
+                    RunCliSetupForm();
                     continue;
 
                 case DashboardAction.Export:
@@ -283,6 +300,18 @@ public sealed class DnsTui
                         }
                         break;
 
+                    case ConsoleKey.V:
+                        if (presets.Count > 0)
+                        {
+                            action = DashboardAction.Verify;
+                            return;
+                        }
+                        break;
+
+                    case ConsoleKey.S:
+                        action = DashboardAction.CliSetup;
+                        return;
+
                     case ConsoleKey.T:
                         if (presets.Count > 0)
                         {
@@ -370,6 +399,52 @@ public sealed class DnsTui
         catch (Exception ex)
         {
             return new OperationResult().Failed(ex.Message);
+        }
+    }
+
+    // ---- modal: CLI integration ---------------------------------------------
+
+    private void RunCliSetupForm()
+    {
+        var status = CliIntegration.GetStatus();
+
+        AnsiConsole.Clear();
+        WriteFormHeader("-- CLI integration --");
+
+        var accent = new Style(_settings.AccentColor.ToSpectreColor());
+        var table = new Table()
+            .Border(TableBorder.Rounded)
+            .BorderStyle(accent)
+            .Expand();
+        table.Title = new TableTitle(" [bold] 'quickdns' command in any terminal [/] ", accent);
+        table.AddColumn("[u]Item[/]");
+        table.AddColumn("[u]Value[/]");
+        table.AddRow("Command", CliIntegration.CommandName);
+        table.AddRow("Install dir", Markup.Escape(status.InstallDirectory));
+        table.AddRow("Executable",
+            status.Installed ? Markup.Escape(status.InstalledPath ?? "-") : "[grey]not installed[/]");
+        table.AddRow("On PATH", status.OnPath ? "[green]yes[/]" : "[red]no[/]");
+        AnsiConsole.Write(table);
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine(" [grey]Enter = " + (status.FullyInstalled ? "remove the command" : "install (per-user, no admin needed)") + " · Esc = back[/]");
+        AnsiConsole.MarkupLine(" [grey]After installing, open a NEW terminal window and type quickdns. Re-run after an update to refresh the copy.[/]");
+
+        while (true)
+        {
+            var key = Console.ReadKey(intercept: true);
+            switch (key.Key)
+            {
+                case ConsoleKey.Enter:
+                    var result = Safe(() => status.FullyInstalled ? CliIntegration.Uninstall() : CliIntegration.Install());
+                    SetStatus(result);
+                    if (result.IsSucceeded)
+                        AddHistory(status.FullyInstalled ? "Removed CLI integration" : "Installed CLI integration (quickdns)");
+                    PromptAnyKey();
+                    return;
+
+                case ConsoleKey.Escape:
+                    return;
+            }
         }
     }
 
@@ -587,6 +662,109 @@ public sealed class DnsTui
             .OrderBy(r => r.Result.DnsMs ?? double.MaxValue)));
         AddHistory($"Benchmarked {results.Count} presets");
         PromptAnyKey();
+    }
+
+    // ---- modal: verify (does each preset really resolve a domain?) -------------
+
+    private void RunVerifyForm(IReadOnlyList<DnsObjViewModel> presets)
+    {
+        AnsiConsole.Clear();
+        WriteFormHeader("-- Verify presets --");
+        AnsiConsole.MarkupLine(" [grey]asks every preset's servers to resolve a domain — catches NXDOMAIN answers,[/]");
+        AnsiConsole.MarkupLine(" [grey]censorship and hijacking by comparing the returned addresses side by side[/]");
+        AnsiConsole.WriteLine();
+
+        var domain = Input.Ask("Domain to resolve (Enter = google.com)", defaultValue: "google.com",
+            validator: v => DnsValidator.IsValidHostname(v)
+                ? null
+                : "Enter a valid hostname, e.g. example.com.");
+        if (domain is null)
+        {
+            Cancelled();
+            return;
+        }
+        domain = domain.Trim().TrimEnd('.').ToLowerInvariant();
+
+        var results = new List<(string Preset, string Server, DnsResolveResult Result)>();
+        var n = 0;
+        foreach (var preset in presets)
+        {
+            n++;
+            var servers = new List<string> { preset.FirstDns };
+            if (!string.IsNullOrWhiteSpace(preset.SecondDns))
+                servers.Add(preset.SecondDns);
+
+            foreach (var server in servers)
+            {
+                AnsiConsole.MarkupLine($" [grey]asking {n}/{presets.Count} {Markup.Escape(preset.Name ?? "?")} → {Markup.Escape(server)} about {Markup.Escape(domain)} …[/]");
+                results.Add((preset.Name ?? "?", server, ResolveSafely(server, domain)));
+            }
+        }
+
+        AnsiConsole.Clear();
+        WriteFormHeader($"-- Verify: resolving {domain} --");
+        AnsiConsole.Write(BuildResolveTable(results));
+
+        var allOk = results.Count > 0 && results.All(r => r.Result.Resolved);
+        var answers = results.Where(r => r.Result.Resolved)
+            .Select(r => string.Join(',', r.Result.Addresses))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+        if (allOk)
+            SetStatus(new OperationResult().Succeeded(answers == 1
+                ? $"all {results.Count} server(s) agree on the same answer for {domain}"
+                : $"all servers resolved {domain}, but they returned DIFFERENT addresses — check for hijacking"));
+        else
+            SetStatus(new OperationResult().Failed(
+                $"{results.Count(r => !r.Result.Resolved)} of {results.Count} server(s) failed to resolve {domain}"));
+        AddHistory($"Verified {presets.Count} presets against {domain}");
+        PromptAnyKey();
+    }
+
+    private IRenderable BuildResolveTable(IReadOnlyList<(string Preset, string Server, DnsResolveResult Result)> rows)
+    {
+        var accent = new Style(_settings.AccentColor.ToSpectreColor());
+        var table = new Table()
+            .Border(TableBorder.Rounded)
+            .BorderStyle(accent)
+            .Expand();
+        table.Title = new TableTitle(" [bold] Domain resolution across presets [/] ", accent);
+        table.AddColumn("[u]Preset[/]");
+        table.AddColumn("[u]Server[/]");
+        table.AddColumn("[u]Speed[/]");
+        table.AddColumn("[u]Answer[/]");
+        table.AddColumn("[u]Verdict[/]");
+
+        foreach (var (preset, server, result) in rows)
+        {
+            var answer = result.Resolved
+                ? Markup.Escape(string.Join(", ", result.Addresses.Take(3)) + (result.Addresses.Count > 3 ? " …" : string.Empty))
+                : string.Empty;
+
+            table.AddRow(
+                Markup.Escape(preset),
+                Markup.Escape(server),
+                result.Ms is { } ms ? $"{ms:F0} ms" : "[grey]n/a[/]",
+                answer,
+                result.Resolved
+                    ? "[green]resolved[/]"
+                    : $"[red]failed[/] {Markup.Escape(result.Error)}");
+        }
+
+        return table;
+    }
+
+    /// <summary>Runs a resolve probe, converting unexpected exceptions into a failed result.</summary>
+    private DnsResolveResult ResolveSafely(string server, string domain)
+    {
+        try
+        {
+            return _probeService.Resolve(server, domain);
+        }
+        catch (Exception ex)
+        {
+            return new DnsResolveResult(server, domain, false, null, [], 0, ex.Message);
+        }
     }
 
     private IRenderable BuildProbeTable(IEnumerable<(string Label, string Server, DnsProbeResult Result)> rows)

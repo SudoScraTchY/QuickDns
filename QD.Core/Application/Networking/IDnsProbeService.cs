@@ -9,7 +9,17 @@ public sealed record DnsProbeResult(string Server, double? PingMs, double? DnsMs
     public bool Reachable => DnsMs is not null || TcpMs is not null;
 }
 
-/// <summary>Runs reachability and latency probes against DNS servers.</summary>
+/// <summary>Result of asking one DNS server to resolve a specific domain.</summary>
+public sealed record DnsResolveResult(
+    string Server,
+    string Domain,
+    bool Resolved,
+    double? Ms,
+    IReadOnlyList<string> Addresses,
+    int Rcode,
+    string Error);
+
+/// <summary>Runs reachability, latency and domain-resolution probes against DNS servers.</summary>
 public interface IDnsProbeService
 {
     /// <summary>
@@ -18,4 +28,10 @@ public interface IDnsProbeService
     /// Each step has a 2 second timeout. Never throws; failures are reported in the result.
     /// </summary>
     DnsProbeResult Probe(string server);
+
+    /// <summary>
+    /// Asks one DNS server to resolve a specific domain and reports whether an answer came back,
+    /// how fast, and which addresses were returned. Never throws; failures are reported in the result.
+    /// </summary>
+    DnsResolveResult Resolve(string server, string domain);
 }

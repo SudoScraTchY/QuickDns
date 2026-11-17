@@ -7,7 +7,7 @@ Pick a saved DNS preset, pick an adapter, press Enter — done. One self-contain
 [![Project website](https://img.shields.io/badge/project%20website-sudoscratchy.github.io%2FQuickDns-0b0c10)](https://sudoscratchy.github.io/QuickDNS/)
 
 ```
-╭─ QuickDNS v2.4.0 ──────────────────────────────────────────────────────────╮
+╭─ QuickDNS v2.5.0 ──────────────────────────────────────────────────────────╮
 │ Adapter  Ethernet · Realtek PCIe GbE Family Controller · ● Up              │
 │ IP       192.168.1.4                                                       │
 │ DNS      1.1.1.1 | 1.0.0.1  Cloudflare                                     │
@@ -17,42 +17,50 @@ Pick a saved DNS preset, pick an adapter, press Enter — done. One self-contain
 │ ❯   Google      8.8.8.8…    │ │ Status     Up                              │
 │     Quad9       9.9.9.9…    │ │ Gateway    192.168.1.1                     │
 │     OpenDNS     208.67…     │ │ DNS        1.1.1.1, 1.0.0.1                │
-│     AdGuard     94.140…     │ │ Backend    WMI (…SetDNSServerSearchOrder)  │
+│     AdGuard     94.140…     │ │ Backend    netsh (interface ip set dns)    │
 ╰─────────────────────────────╯ ╰────────────────────────────────────────────╯
  done: applied 'Google' → 8.8.8.8 | 8.8.4.4
- ↑↓ select  ↵ apply  A adapter  G catalog  C new  E edit  D delete  U unset  X export  I import  T test  B bench  R refresh  Q quit
+ ↑↓ select  ↵ apply  A adapter  G catalog  C new  E edit  D delete  U unset  X export  I import  T test  B bench  V verify  S setup cli  R refresh  Q quit
 ```
 
 ## Features
 
 - **Instant switching** — apply, edit, delete and unset (back to DHCP) DNS presets from a live dashboard; the active preset is marked with ●
 - **Adapter targeting** — any Ethernet/Wi-Fi adapter can be the target; pick one explicitly (persisted) or let *Auto* choose the adapter that is up with an IPv4 gateway
-- **Cross-platform** — Windows via WMI; Linux via NetworkManager (`nmcli`, persistent), `systemd-resolved` (`resolvectl`), or `/etc/resolv.conf` fallback — auto-detected
+- **Cross-platform** — Windows via `netsh interface ip set dns` (documented, trim/AOT-safe); Linux via NetworkManager (`nmcli`, persistent), `systemd-resolved` (`resolvectl`), or `/etc/resolv.conf` fallback — auto-detected
 - **Fast boot** — ready in tens of milliseconds; trimmed, ReadyToRun, self-contained single file
 - **Update-proof data** — presets live in your user profile, an auto-backup is refreshed on every clean start, and a corrupted store self-heals from it
 - **Portable presets** — export/import to versioned JSON or simple CSV/line format (`X`/`I` keys or CLI), de-duplicated and validated on import
 - **Built-in DNS testing** — ping, real DNS query speed and TCP/UDP reachability for the selected preset (`T`) or a speed benchmark across all presets (`B`)
+- **Verify against censorship** — resolve a domain through every preset at once (`V`) and compare the answers side by side: NXDOMAIN replies, timeouts and differing addresses (hijacking) are immediately visible
+- **Any terminal, one command** — `QuickDNS --setup` (or `S` in the dashboard) installs the `quickdns` command per-user, with no separate installer or script: the app copies itself to a per-user bin directory and puts it on your PATH (Windows: `%LOCALAPPDATA%\Programs\QuickDNS` + user PATH with a live environment broadcast; Linux: a `~/.local/bin/quickdns` symlink). `--uninstall` reverts it, and `--diagnostics` reports the integration status
 - **Optional DNS catalog** — a bundled bulk file of free resolvers: global (Cloudflare, Google, Quad9, OpenDNS, AdGuard, Control D, Mullvad…) and Iranian (Shecan, Shatel, Electro, Begzar, Radar Game, 403.online, Shelter, Pishgaman, TCI), import one or all (`G`)
 - **First-run friendly** — ships with Cloudflare, Google, Quad9, OpenDNS and AdGuard presets
 - **Honest feedback** — IP validation on input, confirm-before-delete, elevation warnings, inline success/error messages, `crash.log` when anything fails
 
 ## Download
 
-Grab the latest build from the **[latest release](https://github.com/SudoScraTchY/QuickDns/releases/tag/latest)** (or the workflow artifacts). Every zip is a **self-contained** single-file executable — no .NET installation needed. Unzip and run; that's the install. Each zip has a matching `.sha256` checksum file.
+Grab the latest build from the **[latest release](https://github.com/SudoScraTchY/QuickDns/releases/latest)** — its page starts with a generated Markdown table with a direct download link and a checksum link for every artifact. Every self-contained zip is a single-file executable — no .NET installation needed. Unzip and run; that's the install. Each zip has a matching `.sha256` checksum file next to it.
+
+Direct links (always the newest build, stable URLs):
 
 | File | For |
 |---|---|
-| `QuickDNS-win-x64.zip` | Windows 10/11 (x64) |
-| `QuickDNS-win-x86.zip` | Windows (32-bit x86) |
-| `QuickDNS-win-arm64.zip` | Windows on ARM |
-| `QuickDNS-win-x64-aot.zip` | Windows x64, experimental NativeAOT build (fastest startup) |
-| `QuickDNS-linux-x64.zip` | Linux, glibc distros (x64) |
-| `QuickDNS-linux-arm64.zip` | Linux, glibc (ARM64 — Raspberry Pi 5, Graviton…) |
-| `QuickDNS-linux-arm.zip` | Linux, glibc (ARM32) |
-| `QuickDNS-linux-musl-x64.zip` | Alpine & other musl distros (x64) |
-| `QuickDNS-linux-musl-arm64.zip` | Alpine & other musl distros (ARM64) |
+| [QuickDNS-win-x64.zip](https://github.com/SudoScraTchY/QuickDns/releases/latest/download/QuickDNS-win-x64.zip) | Windows 10/11 (x64) — self-contained |
+| [QuickDNS-win-x86.zip](https://github.com/SudoScraTchY/QuickDns/releases/latest/download/QuickDNS-win-x86.zip) | Windows (32-bit x86) — self-contained |
+| [QuickDNS-win-arm64.zip](https://github.com/SudoScraTchY/QuickDns/releases/latest/download/QuickDNS-win-arm64.zip) | Windows on ARM — self-contained |
+| [QuickDNS-win-x64-aot.zip](https://github.com/SudoScraTchY/QuickDns/releases/latest/download/QuickDNS-win-x64-aot.zip) | Windows x64, experimental NativeAOT build (fastest startup) |
+| [QuickDNS-linux-x64.zip](https://github.com/SudoScraTchY/QuickDns/releases/latest/download/QuickDNS-linux-x64.zip) | Linux, glibc distros (x64) |
+| [QuickDNS-linux-arm64.zip](https://github.com/SudoScraTchY/QuickDns/releases/latest/download/QuickDNS-linux-arm64.zip) | Linux, glibc (ARM64 — Raspberry Pi 5, Graviton…) |
+| [QuickDNS-linux-arm.zip](https://github.com/SudoScraTchY/QuickDns/releases/latest/download/QuickDNS-linux-arm.zip) | Linux, glibc (ARM32) |
+| [QuickDNS-linux-musl-x64.zip](https://github.com/SudoScraTchY/QuickDns/releases/latest/download/QuickDNS-linux-musl-x64.zip) | Alpine & other musl distros (x64) |
+| [QuickDNS-linux-musl-arm64.zip](https://github.com/SudoScraTchY/QuickDns/releases/latest/download/QuickDNS-linux-musl-arm64.zip) | Alpine & other musl distros (ARM64) |
+| [QuickDNS-win-x64-fd.zip](https://github.com/SudoScraTchY/QuickDns/releases/latest/download/QuickDNS-win-x64-fd.zip) · [QuickDNS-win-arm64-fd.zip](https://github.com/SudoScraTchY/QuickDns/releases/latest/download/QuickDNS-win-arm64-fd.zip) | Windows, **framework-dependent** — tiny download, needs the [.NET 11 runtime](https://dotnet.microsoft.com/download/dotnet/11.0) |
+| [QuickDNS-linux-x64-fd.zip](https://github.com/SudoScraTchY/QuickDns/releases/latest/download/QuickDNS-linux-x64-fd.zip) · [QuickDNS-linux-arm64-fd.zip](https://github.com/SudoScraTchY/QuickDns/releases/latest/download/QuickDNS-linux-arm64-fd.zip) | Linux, **framework-dependent** — needs the .NET 11 runtime |
 
-macOS builds are not published yet — the app refuses to run there until the adapter service gains a macOS backend, and we don't ship binaries that can't work.
+Every link above works with `.sha256` appended for the checksum file. macOS builds are not published yet — the app refuses to run there until the adapter service gains a macOS backend, and we don't ship binaries that can't work.
+
+After unzipping, run `QuickDNS --setup` once to make `quickdns` callable from any terminal window.
 
 ## Usage
 
@@ -63,6 +71,8 @@ QuickDNS --export [path]          # all presets → portable JSON (default: new 
 QuickDNS --export-csv [path]      # all presets → CSV (name,primary,secondary)
 QuickDNS --import <path>          # import JSON or line format; duplicates are skipped
 QuickDNS --test <name|ip>         # ping, DNS query speed and reachability probe
+QuickDNS --setup                  # install the 'quickdns' command for any terminal (per-user, no admin)
+QuickDNS --uninstall              # remove that installation again
 QuickDNS --version | --help
 ```
 
@@ -80,6 +90,8 @@ Dashboard keys:
 | `U` | Clear DNS — back to automatic (DHCP) |
 | `X` / `I` | Export presets to JSON/CSV / import (JSON or line format, auto-detected) |
 | `T` / `B` | Test selected preset (ping, DNS speed, reachability) / benchmark all presets |
+| `V` | Verify: resolve a domain through every preset and compare answers (NXDOMAIN / censorship / hijacking) |
+| `S` | CLI integration: install/remove the `quickdns` command for any terminal |
 | `R` / `F5` | Refresh adapter + DNS state |
 | `Q` / `Esc` | Quit |
 
@@ -119,7 +131,7 @@ Coming from QuickDNS 1.x? Your old `settings.json` / `DnsDB.db` from the working
 
 ## Build
 
-Requires the .NET 11 SDK (the repository currently pins the 11.0 RC; bump `global.json` after GA).
+Requires the .NET 11 SDK (11.0.100 GA; `global.json` pins it, `rollForward: latestFeature` picks up newer patches).
 
 ```bash
 dotnet build QuickDNS.sln
@@ -136,7 +148,7 @@ dotnet publish QuickDnsConsole/QuickDnsConsole.csproj -c Release -r win-x64 \
 # same with -r linux-x64 for Linux
 ```
 
-CI runs the test suite on Windows and Linux, then builds every target in the matrix (self-contained, trimmed, ReadyToRun single files with SHA256 checksums). Pushes to `main` refresh the rolling `latest` release; `v*` tags produce versioned releases with the tag version stamped into the executable.
+CI runs the test suite on Windows and Linux, then builds every target in the matrix: self-contained trimmed ReadyToRun single files **plus framework-dependent builds**, each with SHA256 checksums and a smoke test (`--version`, `--diagnostics`, and a `--setup`/`--uninstall` round trip). The release body starts with a generated Markdown download table (direct links + checksums). Pushes to `main` refresh the rolling `latest` release; `v*` tags produce versioned releases with the tag version stamped into the executable.
 
 ## Performance notes
 
@@ -144,7 +156,7 @@ The 1.x design paid a second of startup tax: a hard-coded `Thread.Sleep(1000)`, 
 
 - composition root is ~10 lines of `new` — no `Microsoft.Extensions.Hosting`
 - SQLite opens lazily with short-lived pooled connections (WAL + busy timeout), no init races
-- WMI is contacted **only** when applying/clearing DNS, via a scoped `InterfaceIndex` query
+- DNS changes run `netsh interface ip set dns` as a child process (scoped to the adapter name, 15 s timeout) — no COM, so published builds work identically under trimming and NativeAOT
 - trimmed ReadyToRun single file, reflection-free JSON, `InvariantGlobalization`
 - .NET 11 with dead runtime services switched off (concurrent GC, startup hooks, EventSource, hot reload, reflection JSON)
 
@@ -156,25 +168,27 @@ Measured on the dev machine (median of 15 warm runs):
 | **.NET 11, R2R + trimmed** | **25 ms** | **122 ms** | 23.3 MB |
 | **.NET 11, NativeAOT (experimental)** | **8 ms** | **76 ms** | 7.5 MB (exe + e_sqlite3) |
 
-The adapter/store work dominates `--diagnostics`, so that number is workload-bound; pure process boot (the part the .NET version controls) dropped 37% with .NET 11 R2R and 5× with NativeAOT. The AOT artifact is marked experimental: boot, diagnostics and the store are verified, but it has had less real-console mileage than the R2R build, which remains the default download.
+The adapter/store work dominates `--diagnostics`, so that number is workload-bound; pure process boot (the part the .NET version controls) dropped 37% with .NET 11 R2R and 5× with NativeAOT. The AOT artifact is marked experimental: CI compiles it and smoke-tests `--version`, `--diagnostics` and the CLI integration round trip on every build; the R2R build remains the default download.
 
 ## Project layout
 
 ```
 QD.Core/
-  Application/Networking/    adapter services (Windows WMI, Linux nmcli/resolvectl) + DNS probe (ping, speed, reachability)
+  Application/Networking/    adapter services (Windows netsh, Linux nmcli/resolvectl) + DNS probe (ping, speed, reachability, domain resolve)
   Application/Catalog/       built-in DNS catalog (embedded bulk file: global + Iranian resolvers)
   Application/               preset CRUD, adapter-aware apply/clear, bulk export/import
   Infrastructure/SQLite/     store: schema, WAL, migrations, corruption quarantine
   Resources/                 dns-catalog.json (the embedded catalog file)
 QuickDnsConsole/
   Program.cs                 composition root, CLI, crash log
+  CliIntegration.cs          built-in --setup/--uninstall: per-user quickdns command + PATH management
   Tui/                       dashboard state machine, renderables, input
 QD.Tests/                    application logic (fakes), SQLite integration, probes, catalog, TUI rendering
 ```
 
 ## Version history
 
+- **2.5** — .NET 11 GA; DNS backend on Windows switched from WMI (broke in NativeAOT/trimmed builds) to `netsh`; `V` verify (resolve a domain across presets, detect hijacking); built-in CLI integration (`--setup`/`--uninstall`/`S`): `quickdns` callable from any terminal, no installer; framework-dependent release builds; download table + direct links on release pages and site
 - **2.4** — optional built-in DNS catalog (`G`): bundled bulk file of global + Iranian free resolvers with import-one/import-all
 - **2.3** — bulk import/export (CSV + line format, auto-detected), ping / DNS-speed / reachability tests (`T` test, `B` benchmark, `--test` CLI)
 - **2.2** — .NET 11 (RC2) upgrade: boot measured 40 ms → 25 ms (R2R) → 8 ms (experimental NativeAOT), runtime services trimmed, size 22.9 MB → 7.5 MB with AOT

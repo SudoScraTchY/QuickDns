@@ -17,24 +17,20 @@ publish/
 *.user
 *.userosscache
 *.sln.docstates
-
 # Test results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
 TestResult.xml
-
 # NuGet
 *.nupkg
 *.snupkg
 **/[Pp]ackages/*
 *.nuget.props
 *.nuget.targets
-
 # User-specific files
 *.rsuser
 *.userprefs
 mono_crash.*
-
 # Files built by Visual Studio
 *_i.c
 *_p.c
@@ -64,7 +60,6 @@ mono_crash.*
 *.pidb
 *.svclog
 *.scc
-
 # Visual C++ cache files
 ipch/
 *.aps
@@ -75,7 +70,6 @@ ipch/
 *.cachefile
 *.VC.db
 *.VC.VC.opendb
-
 # Profiler / coverage
 *.psess
 *.vsp
@@ -86,14 +80,12 @@ ipch/
 coverage*.json
 coverage*.xml
 coverage*.info
-
 # ReSharper / Rider / CodeRush
 _ReSharper*/
 *.[Rr]e[Ss]harper
 *.DotSettings.user
 .cr/personal
 *.sln.iml
-
 # Publish output
 *.pubxml
 *.pubxml.user
@@ -101,14 +93,12 @@ _ReSharper*/
 *.publishsettings
 PublishScripts/
 *.azurePubxml
-
 # OS detritus
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
-
 # Local history / IDE
 .localhistory/
 .vshistory/
@@ -122,6 +112,6 @@ $RECYCLE.BIN/
 MigrationBackup/
 .ionide/
 healthchecksdb
-
 # agent scratch
 .scratch/
+.zwork/

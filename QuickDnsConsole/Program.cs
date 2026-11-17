@@ -94,6 +94,12 @@ internal static class Program
                 }
                 return RunTestOperation(args[index + 1]);
 
+            case "--setup":
+                return RunCliOperation(CliIntegration.Install);
+
+            case "--uninstall":
+                return RunCliOperation(CliIntegration.Uninstall);
+
             case "--import" or "-i":
                 if (index + 1 >= args.Length)
                 {
@@ -168,6 +174,21 @@ internal static class Program
         {
             var (app, _, _) = CreateApplication();
             var result = operation(app);
+            Console.WriteLine(result.Message);
+            return result.IsSucceeded ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            return Fail(ex);
+        }
+    }
+
+    /// <summary>--setup / --uninstall: manage the per-user 'quickdns' command installation.</summary>
+    private static int RunCliOperation(Func<OperationResult> operation)
+    {
+        try
+        {
+            var result = operation();
             Console.WriteLine(result.Message);
             return result.IsSucceeded ? 0 : 1;
         }
@@ -262,6 +283,8 @@ internal static class Program
         Console.WriteLine("  --export-csv [path]  Export all presets to CSV (name,primary,secondary)");
         Console.WriteLine("  --import <path>   Import presets from a JSON or line-format file (duplicates are skipped)");
         Console.WriteLine("  --test <name|ip>  Ping, DNS query speed and reachability for a preset or server");
+        Console.WriteLine("  --setup        Make 'quickdns' callable from any terminal (per-user install, no admin)");
+        Console.WriteLine("  --uninstall    Remove that per-user CLI installation");
         Console.WriteLine("  --version      Print version and exit");
         Console.WriteLine("  --help         Show this help");
         Console.WriteLine();
@@ -291,6 +314,13 @@ internal static class Program
         Console.WriteLine($"Elevated:    {service.IsElevated}");
         Console.WriteLine($"DNS backend: {service.BackendDescription}");
         Console.WriteLine($"Config dir:  {AppPaths.ConfigDirectory}");
+
+        var cli = CliIntegration.GetStatus();
+        Console.WriteLine($"CLI command: {(cli.FullyInstalled
+            ? $"installed — {cli.InstalledPath}"
+            : cli.Installed
+                ? "executable present but not on PATH — run QuickDNS --setup to repair"
+                : $"not installed — run QuickDNS --setup to enable 'quickdns' in any terminal")}");
 
         try
         {
