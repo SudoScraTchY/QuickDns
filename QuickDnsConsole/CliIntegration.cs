@@ -50,6 +50,40 @@ public static class CliIntegration
         return new Status(installed, onPath, installedPath, InstallDirectory);
     }
 
+    /// <summary>
+    /// Runtime files that must sit next to the executable: native libraries
+    /// (e.g. e_sqlite3.dll for Microsoft.Data.Sqlite) and, for framework-dependent
+    /// layouts, the managed dll + its *.deps.json / *.runtimeconfig.json.
+    /// </summary>
+    private static readonly string[] CompanionPatterns =
+        ["*.dll", "*.deps.json", "*.runtimeconfig.json"];
+
+    /// <summary>Companion files next to the running executable (never the exe itself).</summary>
+    private static IReadOnlyList<string> GetCompanionFiles()
+    {
+        var source = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(source))
+            return [];
+
+        var sourceDir = Path.GetDirectoryName(Path.GetFullPath(source));
+        if (string.IsNullOrEmpty(sourceDir) || !Directory.Exists(sourceDir))
+            return [];
+
+        var exePath = Path.GetFullPath(source);
+        var sameName = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var files = new List<string>();
+        foreach (var pattern in CompanionPatterns)
+        {
+            foreach (var file in Directory.EnumerateFiles(sourceDir, pattern))
+            {
+                if (!string.Equals(Path.GetFullPath(file), exePath, sameName))
+                    files.Add(file);
+            }
+        }
+
+        return [.. files.OrderBy(f => f, StringComparer.OrdinalIgnoreCase)];
+    }
+
     /// <summary>Installs the command: copy the running exe + ensure the PATH entry. Never needs elevation.</summary>
     public static OperationResult Install()
     {
@@ -79,6 +113,22 @@ public static class CliIntegration
                 CopyWithRetry(source, installedPath);
             }
 
+            // Companion runtime files MUST come along: NativeAOT builds load
+            // e_sqlite3.dll from the exe's own directory, and framework-dependent
+            // layouts need their managed dll + *.deps.json / *.runtimeconfig.json.
+            // Without them the installed copy boots, but the preset store cannot open.
+            var companions = GetCompanionFiles();
+            var copiedCompanions = 0;
+            foreach (var companion in companions)
+            {
+                var target = Path.Combine(InstallDirectory, Path.GetFileName(companion));
+                if (string.Equals(Path.GetFullPath(companion), Path.GetFullPath(target), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                    continue; // running from the install dir: already in place
+
+                CopyWithRetry(companion, target);
+                copiedCompanions++;
+            }
+
             string pathMessage;
             if (OperatingSystem.IsWindows())
             {
@@ -95,8 +145,11 @@ public static class CliIntegration
                 pathMessage = hint;
             }
 
+            var companionNote = companions.Count > 0
+                ? $" (+{copiedCompanions} runtime file(s))"
+                : string.Empty;
             return new OperationResult().Succeeded(
-                $"Installed {CommandName} → {installedPath}. {pathMessage} Open a NEW terminal window and type {CommandName}.");
+                $"Installed {CommandName} → {installedPath}{companionNote}. {pathMessage} Open a NEW terminal window and type {CommandName}.");
         }
         catch (Exception ex)
         {
@@ -134,6 +187,27 @@ public static class CliIntegration
                 {
                     notes.Add($"{installedPath} is in use (this instance?) — it will be removed next time.");
                 }
+            }
+
+            // Companion runtime files (native dlls, deps/runtimeconfig) were installed
+            // next to the exe — remove them too.
+            foreach (var pattern in CompanionPatterns)
+            {
+                foreach (var file in Directory.EnumerateFiles(InstallDirectory, pattern))
+                {
+                    try { File.Delete(file); }
+                    catch { /* best-effort; a locked file disappears next time */ }
+                }
+            }
+
+            try
+            {
+                if (!Directory.EnumerateFileSystemEntries(InstallDirectory).Any())
+                    Directory.Delete(InstallDirectory);
+            }
+            catch
+            {
+                // Non-empty or locked dir: leave it, the installed files are already gone.
             }
 
             return notes.Count > 0

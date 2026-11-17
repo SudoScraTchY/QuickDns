@@ -7,7 +7,7 @@ Pick a saved DNS preset, pick an adapter, press Enter — done. One self-contain
 [![Project website](https://img.shields.io/badge/project%20website-sudoscratchy.github.io%2FQuickDns-0b0c10)](https://sudoscratchy.github.io/QuickDNS/)
 
 ```
-╭─ QuickDNS v2.5.0 ──────────────────────────────────────────────────────────╮
+╭─ QuickDNS v2.5.1 ──────────────────────────────────────────────────────────╮
 │ Adapter  Ethernet · Realtek PCIe GbE Family Controller · ● Up              │
 │ IP       192.168.1.4                                                       │
 │ DNS      1.1.1.1 | 1.0.0.1  Cloudflare                                     │
@@ -33,7 +33,7 @@ Pick a saved DNS preset, pick an adapter, press Enter — done. One self-contain
 - **Portable presets** — export/import to versioned JSON or simple CSV/line format (`X`/`I` keys or CLI), de-duplicated and validated on import
 - **Built-in DNS testing** — ping, real DNS query speed and TCP/UDP reachability for the selected preset (`T`) or a speed benchmark across all presets (`B`)
 - **Verify against censorship** — resolve a domain through every preset at once (`V`) and compare the answers side by side: NXDOMAIN replies, timeouts and differing addresses (hijacking) are immediately visible
-- **Any terminal, one command** — `QuickDNS --setup` (or `S` in the dashboard) installs the `quickdns` command per-user, with no separate installer or script: the app copies itself to a per-user bin directory and puts it on your PATH (Windows: `%LOCALAPPDATA%\Programs\QuickDNS` + user PATH with a live environment broadcast; Linux: a `~/.local/bin/quickdns` symlink). `--uninstall` reverts it, and `--diagnostics` reports the integration status
+- **Any terminal, one command** — `QuickDNS --setup` (or `S` in the dashboard) installs the `quickdns` command per-user, with no separate installer or script: the app copies itself — **together with its companion runtime files** (native libraries like `e_sqlite3.dll`, `*.deps.json`) — to a per-user bin directory and puts it on your PATH (Windows: `%LOCALAPPDATA%\Programs\QuickDNS` + user PATH with a live environment broadcast; Linux: a `~/.local/bin/quickdns` symlink). `--uninstall` reverts it, and `--diagnostics` reports the integration status
 - **Optional DNS catalog** — a bundled bulk file of free resolvers: global (Cloudflare, Google, Quad9, OpenDNS, AdGuard, Control D, Mullvad…) and Iranian (Shecan, Shatel, Electro, Begzar, Radar Game, 403.online, Shelter, Pishgaman, TCI), import one or all (`G`)
 - **First-run friendly** — ships with Cloudflare, Google, Quad9, OpenDNS and AdGuard presets
 - **Honest feedback** — IP validation on input, confirm-before-delete, elevation warnings, inline success/error messages, `crash.log` when anything fails
@@ -188,6 +188,7 @@ QD.Tests/                    application logic (fakes), SQLite integration, prob
 
 ## Version history
 
+- **2.5.1** — `--setup` now installs companion runtime files next to the exe: NativeAOT builds load `e_sqlite3.dll` from the exe's own directory, so an install that copied only the exe broke the preset store ("dns lists") when launched via the installed command; CI smoke now exercises the *installed* copy to catch this class of bug
 - **2.5** — .NET 11 GA; DNS backend on Windows switched from WMI (broke in NativeAOT/trimmed builds) to `netsh`; `V` verify (resolve a domain across presets, detect hijacking); built-in CLI integration (`--setup`/`--uninstall`/`S`): `quickdns` callable from any terminal, no installer; framework-dependent release builds; download table + direct links on release pages and site
 - **2.4** — optional built-in DNS catalog (`G`): bundled bulk file of global + Iranian free resolvers with import-one/import-all
 - **2.3** — bulk import/export (CSV + line format, auto-detected), ping / DNS-speed / reachability tests (`T` test, `B` benchmark, `--test` CLI)

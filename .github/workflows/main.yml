@@ -103,6 +103,9 @@ jobs:
           .\publish\aot\QuickDNSConsole.exe --version
           .\publish\aot\QuickDNSConsole.exe --diagnostics
           .\publish\aot\QuickDNSConsole.exe --setup
+          # Exercise the INSTALLED copy: NativeAOT builds need e_sqlite3.dll next to the
+          # exe, so a --setup that only copies the exe would break the preset store.
+          & "$env:LOCALAPPDATA\Programs\QuickDNS\QuickDNS.exe" --diagnostics
           .\publish\aot\QuickDNSConsole.exe --uninstall
 
       - name: Package (zip + SHA256)
@@ -222,6 +225,13 @@ jobs:
           "$EXE" --version
           "$EXE" --diagnostics
           "$EXE" --setup
+          # Exercise the INSTALLED copy: catches missing companion runtime files
+          # (native dlls / deps.json) that --setup must carry over.
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            "$LOCALAPPDATA/Programs/QuickDNS/QuickDNS.exe" --diagnostics
+          else
+            "$HOME/.local/bin/quickdns" --diagnostics
+          fi
           "$EXE" --uninstall
 
       - name: Package (zip + SHA256)
