@@ -47,21 +47,52 @@ public sealed class LinuxNetworkAdapterService : INetworkAdapterService
     public OperationResult ApplyDns(AdapterInfo adapter, string primaryDns, string? secondaryDns)
     {
         var servers = secondaryDns is null ? [primaryDns] : new[] { primaryDns, secondaryDns };
-        return DetectBackend() switch
+        var result = DetectBackend() switch
         {
             Backend.NetworkManager => ApplyWithNetworkManager(adapter, servers),
             Backend.SystemdResolved => ApplyWithResolvectl(adapter, servers),
             _ => ApplyWithResolvConf(servers),
         };
+        return WithCacheFlush(result);
     }
 
-    public OperationResult ClearDns(AdapterInfo adapter) => DetectBackend() switch
+    public OperationResult ClearDns(AdapterInfo adapter)
     {
-        Backend.NetworkManager => ClearWithNetworkManager(adapter),
-        Backend.SystemdResolved => RunAndMap("resolvectl", ["revert", adapter.Name],
-            successMessage: $"{ApplicationMessages.DnsCleared} ({BackendDescription})"),
-        _ => ApplyWithResolvConf([]),
-    };
+        var result = DetectBackend() switch
+        {
+            Backend.NetworkManager => ClearWithNetworkManager(adapter),
+            Backend.SystemdResolved => RunAndMap("resolvectl", ["revert", adapter.Name],
+                successMessage: $"{ApplicationMessages.DnsCleared} ({BackendDescription})"),
+            _ => ApplyWithResolvConf([]),
+        };
+        return WithCacheFlush(result);
+    }
+
+    /// <summary>
+    /// Flushes OS-level DNS caches after a successful change so lookups immediately hit
+    /// the new servers. Best effort and silent on systems without a caching daemon —
+    /// it never turns a successful change into a failure.
+    /// </summary>
+    private OperationResult WithCacheFlush(OperationResult result)
+    {
+        if (!result.IsSucceeded || !FlushDnsCache())
+            return result;
+
+        return new OperationResult().Succeeded($"{result.Message} · DNS cache flushed");
+    }
+
+    private bool FlushDnsCache()
+    {
+        // systemd-resolved keeps a global cache; nscd caches the hosts database;
+        // NetworkManager itself does not cache. Try the known tools in order.
+        if (Which("resolvectl") is { } resolvectl && Capture(resolvectl, ["flush-caches"]).ExitCode == 0)
+            return true;
+        if (Which("systemd-resolve") is { } systemdResolve && Capture(systemdResolve, ["--flush-caches"]).ExitCode == 0)
+            return true;
+        if (Which("nscd") is { } nscd && Capture(nscd, ["-i", "hosts"]).ExitCode == 0)
+            return true;
+        return false;
+    }
 
     private Backend DetectBackend()
     {

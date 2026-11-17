@@ -78,13 +78,13 @@ internal static class Program
                 var exportPath = index + 1 < args.Length && !args[index + 1].StartsWith('-')
                     ? args[index + 1]
                     : AppPaths.NewExportFile();
-                return RunStoreOperation(app => app.ExportPresets(exportPath));
+                return RunStoreOperation(app => app.ExportPresets(exportPath), revealOnSuccess: exportPath);
 
             case "--export-csv" or "-c":
                 var csvPath = index + 1 < args.Length && !args[index + 1].StartsWith('-')
                     ? args[index + 1]
                     : AppPaths.NewExportFile(".csv");
-                return RunStoreOperation(app => app.ExportPresetsCsv(csvPath));
+                return RunStoreOperation(app => app.ExportPresetsCsv(csvPath), revealOnSuccess: csvPath);
 
             case "--test" or "-t":
                 if (index + 1 >= args.Length)
@@ -168,13 +168,20 @@ internal static class Program
         return (app, adapters, warning);
     }
 
-    private static int RunStoreOperation(Func<IDnsObjApplication, OperationResult> operation)
+    /// <summary>
+    /// Runs a preset-store operation. When the caller is a human at a terminal (output not
+    /// redirected) and a reveal path is given, a successful export opens its containing
+    /// folder in the OS file manager. Scripted/redirected runs never open windows.
+    /// </summary>
+    private static int RunStoreOperation(Func<IDnsObjApplication, OperationResult> operation, string? revealOnSuccess = null)
     {
         try
         {
             var (app, _, _) = CreateApplication();
             var result = operation(app);
             Console.WriteLine(result.Message);
+            if (result.IsSucceeded && revealOnSuccess is not null && !Console.IsOutputRedirected)
+                Desktop.RevealInFileManager(revealOnSuccess);
             return result.IsSucceeded ? 0 : 1;
         }
         catch (Exception ex)

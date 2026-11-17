@@ -25,12 +25,12 @@ Pick a saved DNS preset, pick an adapter, press Enter — done. One self-contain
 
 ## Features
 
-- **Instant switching** — apply, edit, delete and unset (back to DHCP) DNS presets from a live dashboard; the active preset is marked with ●
+- **Instant switching** — apply, edit, delete and unset (back to DHCP) DNS presets from a live dashboard; the active preset is marked with ●; every apply/clear also **flushes the OS DNS cache** (`ipconfig /flushdns`, `resolvectl flush-caches`, or `nscd -i hosts`) so the new servers take effect immediately and stale answers are gone
 - **Adapter targeting** — any Ethernet/Wi-Fi adapter can be the target; pick one explicitly (persisted) or let *Auto* choose the adapter that is up with an IPv4 gateway
 - **Cross-platform** — Windows via `netsh interface ip set dns` (documented, trim/AOT-safe); Linux via NetworkManager (`nmcli`, persistent), `systemd-resolved` (`resolvectl`), or `/etc/resolv.conf` fallback — auto-detected
 - **Fast boot** — ready in tens of milliseconds; trimmed, ReadyToRun, self-contained single file
 - **Update-proof data** — presets live in your user profile, an auto-backup is refreshed on every clean start, and a corrupted store self-heals from it
-- **Portable presets** — export/import to versioned JSON or simple CSV/line format (`X`/`I` keys or CLI), de-duplicated and validated on import
+- **Portable presets** — export/import to versioned JSON or simple CSV/line format (`X`/`I` keys or CLI), de-duplicated and validated on import; after a successful export the containing folder opens with the file selected
 - **Built-in DNS testing** — ping, real DNS query speed and TCP/UDP reachability for the selected preset (`T`) or a speed benchmark across all presets (`B`)
 - **Verify against censorship** — resolve a domain through every preset at once (`V`) and compare the answers side by side: NXDOMAIN replies, timeouts and differing addresses (hijacking) are immediately visible
 - **Any terminal, one command** — `QuickDNS --setup` (or `S` in the dashboard) installs the `quickdns` command per-user, with no separate installer or script: the app copies itself — **together with its companion runtime files** (native libraries like `e_sqlite3.dll`, `*.deps.json`) — to a per-user bin directory and puts it on your PATH (Windows: `%LOCALAPPDATA%\Programs\QuickDNS` + user PATH with a live environment broadcast; Linux: a `~/.local/bin/quickdns` symlink). `--uninstall` reverts it, and `--diagnostics` reports the integration status
@@ -188,6 +188,7 @@ QD.Tests/                    application logic (fakes), SQLite integration, prob
 
 ## Version history
 
+- **2.6.0** — DNS cache flush after every apply/clear (`ipconfig /flushdns` on Windows, `resolvectl flush-caches` / `systemd-resolve --flush-caches` / `nscd -i hosts` on Linux — best effort, never fails the change); a successful export opens the containing folder with the new file selected (TUI, and CLI when a human is attached)
 - **2.5.1** — `--setup` now installs companion runtime files next to the exe: NativeAOT builds load `e_sqlite3.dll` from the exe's own directory, so an install that copied only the exe broke the preset store ("dns lists") when launched via the installed command; CI smoke now exercises the *installed* copy to catch this class of bug
 - **2.5** — .NET 11 GA; DNS backend on Windows switched from WMI (broke in NativeAOT/trimmed builds) to `netsh`; `V` verify (resolve a domain across presets, detect hijacking); built-in CLI integration (`--setup`/`--uninstall`/`S`): `quickdns` callable from any terminal, no installer; framework-dependent release builds; download table + direct links on release pages and site
 - **2.4** — optional built-in DNS catalog (`G`): bundled bulk file of global + Iranian free resolvers with import-one/import-all

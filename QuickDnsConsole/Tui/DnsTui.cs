@@ -525,7 +525,10 @@ public sealed class DnsTui
         var result = Safe(() => isCsv ? _dnsApp.ExportPresetsCsv(effective) : _dnsApp.ExportPresets(effective));
         SetStatus(result);
         if (result.IsSucceeded)
+        {
             AddHistory($"Exported presets → {Path.GetFileName(effective)}");
+            Desktop.RevealInFileManager(effective);
+        }
         PromptAnyKey();
     }
 

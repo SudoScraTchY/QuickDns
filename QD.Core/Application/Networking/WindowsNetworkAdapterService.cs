@@ -69,11 +69,29 @@ public sealed class WindowsNetworkAdapterService : INetworkAdapterService
         if (v6Result is { } fail6)
             return fail6;
 
-        var message = notes.Count > 0
-            ? $"{ApplicationMessages.DnsChanged} ({string.Join("; ", notes)})"
-            : ApplicationMessages.DnsChanged;
+        var message = BuildSuccessMessage(ApplicationMessages.DnsChanged, notes);
         return new OperationResult().Succeeded(message);
     }
+
+    /// <summary>Appends the (best-effort) DNS cache flush result to a success message.</summary>
+    private static string BuildSuccessMessage(string baseMessage, List<string> notes)
+    {
+        var parts = new List<string>();
+        if (FlushDnsCache())
+            parts.Add("DNS cache flushed");
+        else
+            parts.Add("DNS cache could not be flushed (ipconfig /flushdns failed)");
+        parts.AddRange(notes);
+
+        return $"{baseMessage} ({string.Join("; ", parts)})";
+    }
+
+    /// <summary>
+    /// Flushes the Windows DNS resolver cache so lookups immediately use the new servers
+    /// instead of previously cached answers. Best effort: a failed flush never fails the
+    /// change itself (cached entries expire on their own TTLs).
+    /// </summary>
+    private static bool FlushDnsCache() => RunTool("ipconfig.exe", "/flushdns").ExitCode == 0;
 
     /// <summary>Resets a family the request did not cover; a failure is a note, not an error.</summary>
     private OperationResult? BestEffortClearFamily(AdapterInfo target, string family, List<string> noteList)
@@ -97,7 +115,8 @@ public sealed class WindowsNetworkAdapterService : INetworkAdapterService
         if (v6 is { } v6Fail)
             return v6Fail;
 
-        return new OperationResult().Succeeded(ApplicationMessages.DnsCleared);
+        return new OperationResult().Succeeded(
+            BuildSuccessMessage(ApplicationMessages.DnsCleared, []));
     }
 
     /// <summary>Sets a static DNS list for one address family. Returns null on success.</summary>
@@ -162,7 +181,7 @@ public sealed class WindowsNetworkAdapterService : INetworkAdapterService
     }
 
     [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Process.Start with ArgumentList needs no reflection or COM.")]
-    private static (int ExitCode, string Output) RunNetsh(params string[] args)
+    private static (int ExitCode, string Output) RunTool(string fileName, params string[] args)
     {
         try
         {
@@ -172,7 +191,7 @@ public sealed class WindowsNetworkAdapterService : INetworkAdapterService
                 {
                     // Resolve from System32 explicitly: PATH-dependent resolution in an
                     // elevated process would let a rogue PATH entry run as admin.
-                    FileName = Path.Combine(Environment.SystemDirectory, "netsh.exe"),
+                    FileName = Path.Combine(Environment.SystemDirectory, fileName),
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -189,7 +208,7 @@ public sealed class WindowsNetworkAdapterService : INetworkAdapterService
             if (!process.WaitForExit(15_000))
             {
                 try { process.Kill(entireProcessTree: true); } catch { /* already gone */ }
-                return (-1, "netsh timed out after 15s");
+                return (-1, $"{fileName} timed out after 15s");
             }
 
             // Drain remaining output of the already-exited process.
@@ -205,6 +224,8 @@ public sealed class WindowsNetworkAdapterService : INetworkAdapterService
             return (-1, ex.Message);
         }
     }
+
+    private static (int ExitCode, string Output) RunNetsh(params string[] args) => RunTool("netsh.exe", args);
 
     private static bool IsIpv4(string server) =>
         IPAddress.TryParse(server.Trim(), out var ip) && ip.AddressFamily == AddressFamily.InterNetwork;
