@@ -108,6 +108,13 @@ jobs:
           & "$env:LOCALAPPDATA\Programs\QuickDNS\QuickDNS.exe" --diagnostics
           .\publish\aot\QuickDNSConsole.exe --uninstall
 
+      - name: Route mode round trip (real proxy + resolution)
+        shell: pwsh
+        run: |
+          .\publish\aot\QuickDNSConsole.exe --route-start
+          Resolve-DnsName example.com -Server 127.0.0.2 -Type A | Out-String
+          .\publish\aot\QuickDNSConsole.exe --route-stop
+
       - name: Package (zip + SHA256)
         shell: bash
         run: |
@@ -233,6 +240,17 @@ jobs:
             "$HOME/.local/bin/quickdns" --diagnostics
           fi
           "$EXE" --uninstall
+
+      - name: Route mode round trip (real proxy + resolution)
+        shell: bash
+        run: |
+          "$EXE" --route-start
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            powershell -NoProfile -Command "Resolve-DnsName example.com -Server 127.0.0.2 -Type A | Out-String"
+          else
+            dig @127.0.0.2 example.com +time=3 +tries=1 +short
+          fi
+          "$EXE" --route-stop
 
       - name: Package (zip + SHA256)
         shell: bash

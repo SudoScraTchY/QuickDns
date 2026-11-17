@@ -24,6 +24,15 @@ public static class AppPaths
     /// <summary>Silent backup refreshed on every successful start.</summary>
     public static string AutoBackupFile => Path.Combine(ConfigDirectory, "presets.autobackup.json");
 
+    /// <summary>Route mode: the active rule snapshot consumed by the host process.</summary>
+    public static string RouteActiveFile => Path.Combine(ConfigDirectory, "routes.active.json");
+
+    /// <summary>Route mode: host process id + heartbeat (mtime refreshed every 5 s).</summary>
+    public static string RouteStateFile => Path.Combine(ConfigDirectory, "routes.state.json");
+
+    /// <summary>Route mode: host process log (start/stop lines, rule list, errors).</summary>
+    public static string RouteLogFile => Path.Combine(ConfigDirectory, "routes.log");
+
     public static string NewExportFile() => NewExportFile(".json");
 
     public static string NewExportFile(string extension) =>

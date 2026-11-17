@@ -16,7 +16,7 @@ namespace QD.Core.Infrastructure.SQLite;
 /// </summary>
 public sealed class DnsDatabase
 {
-    private const int CurrentSchemaVersion = 1;
+    private const int CurrentSchemaVersion = 2;
 
     // Corruption signatures: 11 = SQLITE_CORRUPT, 26 = SQLITE_NOTADB.
     // Everything else (busy, io, disk full) must NOT trigger a quarantine.
@@ -33,6 +33,20 @@ public sealed class DnsDatabase
             updated_utc   TEXT    NOT NULL
         );
         CREATE UNIQUE INDEX IF NOT EXISTS ux_dns_presets_name ON dns_presets (name);
+        """;
+
+    // Route-based DNS rules (schema v2). The preset FK cascades rule deletion when a
+    // preset is removed — dangling rules can never exist.
+    private const string RoutesSql = """
+        CREATE TABLE IF NOT EXISTS dns_routes (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            pattern     TEXT    NOT NULL COLLATE NOCASE,
+            preset_id   INTEGER NOT NULL REFERENCES dns_presets(id) ON DELETE CASCADE,
+            enabled     INTEGER NOT NULL DEFAULT 1,
+            position    INTEGER NOT NULL DEFAULT 0,
+            created_utc TEXT    NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_dns_routes_pattern ON dns_routes (pattern);
         """;
 
     private readonly string _dbPath;
@@ -138,6 +152,7 @@ public sealed class DnsDatabase
         using var transaction = connection.BeginTransaction();
 
         Execute(connection, transaction, SchemaSql);
+        Execute(connection, transaction, RoutesSql);
 
         if (TableExists(connection, transaction, "Dns"))
         {

@@ -258,6 +258,39 @@ public static class DnsWire
         return (rcode, addresses);
     }
 
+    /// <summary>True when the response has the TC (truncation) flag set - the caller should retry over TCP.</summary>
+    public static bool IsTruncated(byte[] response) =>
+        response is { Length: >= 3 } && (response[2] & 0x02) != 0;
+
+    /// <summary>
+    /// Extracts the queried domain name from a DNS query's question section (offset 12,
+    /// uncompressed labels). Returns null when the datagram is malformed.
+    /// </summary>
+    public static string? TryParseQuestionName(byte[] datagram)
+    {
+        if (datagram is null || datagram.Length < 12)
+            return null;
+
+        var labels = new List<string>(8);
+        var i = 12;
+        while (i < datagram.Length)
+        {
+            var length = datagram[i];
+            if (length == 0)
+                break; // root label - end of the name
+
+            if ((length & 0xC0) != 0 || i + 1 + length > datagram.Length)
+                return null; // compression pointers are not valid in a question section
+
+            labels.Add(Encoding.ASCII.GetString(datagram, i + 1, length));
+            i += 1 + length;
+        }
+
+        if (labels.Count == 0 || labels.Any(string.IsNullOrEmpty))
+            return null;
+
+        return string.Join('.', labels).ToLowerInvariant();
+    }
     /// <summary>Skips a (possibly compressed) domain name; returns the index after it.</summary>
     private static int SkipName(byte[] buffer, int index)
     {

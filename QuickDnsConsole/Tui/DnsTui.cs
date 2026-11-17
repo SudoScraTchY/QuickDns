@@ -1,7 +1,10 @@
 using QD.Core.Application.Catalog;
 using QD.Core.Application.Networking;
+using QD.Core.Application.Routing;
 using QD.Core.Cotracts.DnsObjContracts;
+using QD.Core.Domain.DnsRoute;
 using QD.Core.Helper;
+using QuickDNSConsole.RouteProxy;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -22,6 +25,7 @@ internal enum DashboardAction
     Catalog,
     Verify,
     CliSetup,
+    Routes,
 }
 
 /// <summary>
@@ -36,6 +40,8 @@ public sealed class DnsTui
     private readonly INetworkAdapterService _adapterService;
     private readonly IDnsProbeService _probeService;
     private readonly IDnsCatalog _catalog;
+    private readonly IDnsRouteRepository _routeRepo;
+    private readonly RouteModeManager _routeManager;
     private readonly AppSettings _settings;
     private readonly TimeSpan _bootTime;
 
@@ -50,6 +56,8 @@ public sealed class DnsTui
         TimeSpan bootTime,
         IDnsProbeService probeService,
         IDnsCatalog catalog,
+        IDnsRouteRepository routeRepo,
+        RouteModeManager routeManager,
         string? startupWarning = null)
     {
         _dnsApp = dnsApp ?? throw new ArgumentNullException(nameof(dnsApp));
@@ -57,6 +65,8 @@ public sealed class DnsTui
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _probeService = probeService ?? throw new ArgumentNullException(nameof(probeService));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+        _routeRepo = routeRepo ?? throw new ArgumentNullException(nameof(routeRepo));
+        _routeManager = routeManager ?? throw new ArgumentNullException(nameof(routeManager));
         _bootTime = bootTime;
 
         if (!string.IsNullOrEmpty(startupWarning))
@@ -122,6 +132,10 @@ public sealed class DnsTui
 
                 case DashboardAction.CliSetup:
                     RunCliSetupForm();
+                    continue;
+
+                case DashboardAction.Routes:
+                    RunRoutesScreen();
                     continue;
 
                 case DashboardAction.Export:
@@ -308,6 +322,10 @@ public sealed class DnsTui
                         }
                         break;
 
+                    case ConsoleKey.P:
+                        action = DashboardAction.Routes;
+                        return;
+
                     case ConsoleKey.S:
                         action = DashboardAction.CliSetup;
                         return;
@@ -399,6 +417,274 @@ public sealed class DnsTui
         catch (Exception ex)
         {
             return new OperationResult().Failed(ex.Message);
+        }
+    }
+
+    // ---- modal: route-based DNS ---------------------------------------------
+
+    private void RunRoutesScreen()
+    {
+        var selectedIndex = 0;
+
+        while (true)
+        {
+            var routes = SafeListRoutes();
+            var presets = _dnsApp.GetAll().ToDictionary(p => p.Id);
+            selectedIndex = routes.Count == 0 ? 0 : Math.Clamp(selectedIndex, 0, routes.Count - 1);
+            var running = _routeManager.IsProxyAlive();
+            var accent = new Style(_settings.AccentColor.ToSpectreColor());
+
+            AnsiConsole.Clear();
+            WriteFormHeader("-- Route-based DNS --");
+            AnsiConsole.MarkupLine(" [grey]each pattern routes its domain (and subdomains) to the rule's preset; '*' is the fallback. Most specific match wins.[/]");
+            AnsiConsole.MarkupLine($" [grey]{Markup.Escape(_routeManager.DescribeStatus().Replace(Environment.NewLine, " · "))}[/]");
+            AnsiConsole.WriteLine();
+
+            var table = new Table()
+                .Border(TableBorder.Rounded)
+                .BorderStyle(accent)
+                .Expand();
+            table.Title = new TableTitle(
+                $" [bold] Route rules [/] [grey]S = {(running ? "stop route mode" : "start route mode")} · A add · E edit · D delete · Space toggle · Esc back[/] ", accent);
+            table.AddColumn("[u] [/]");
+            table.AddColumn("[u]Pattern[/]");
+            table.AddColumn("[u]Preset[/]");
+            table.AddColumn("[u]Servers[/]");
+            table.AddColumn("[u]On[/]");
+
+            if (routes.Count == 0)
+            {
+                table.AddRow(string.Empty, "[grey]no rules yet — press A to add one[/]", string.Empty, string.Empty, string.Empty);
+            }
+            else
+            {
+                for (var i = 0; i < routes.Count; i++)
+                {
+                    var route = routes[i];
+                    var presetName = presets.TryGetValue(route.PresetId, out var preset) ? preset.Name ?? "?" : "[red]missing preset[/]";
+                    var servers = preset is null ? "" : $"{preset.FirstDns}{(string.IsNullOrWhiteSpace(preset.SecondDns) ? string.Empty : " | " + preset.SecondDns)}";
+                    var selectedStyle = i == selectedIndex
+                        ? new Style(_settings.HighlightForeground.ToSpectreColor(), _settings.HighlightBackground.ToSpectreColor())
+                        : Style.Plain;
+
+                    table.AddRow(
+                        new Markup(i == selectedIndex ? "[green]❯[/]" : " ", selectedStyle),
+                        new Markup(Markup.Escape(route.Pattern), selectedStyle),
+                        new Markup(Markup.Escape(presetName), selectedStyle),
+                        new Markup(Markup.Escape(servers), selectedStyle),
+                        new Markup(route.Enabled ? "[green]yes[/]" : "[grey]no[/]", selectedStyle));
+                }
+            }
+
+            if (running)
+                AnsiConsole.MarkupLine(" [grey]the proxy is running with the snapshot from startup — restart (S, S) to apply edits[/]");
+
+            var key = Console.ReadKey(intercept: true);
+            switch (key.Key)
+            {
+                case ConsoleKey.UpArrow:
+                    selectedIndex = Math.Max(0, selectedIndex - 1);
+                    break;
+
+                case ConsoleKey.DownArrow:
+                    if (routes.Count > 0)
+                        selectedIndex = Math.Min(routes.Count - 1, selectedIndex + 1);
+                    break;
+
+                case ConsoleKey.A:
+                    RunRouteAddForm();
+                    break;
+
+                case ConsoleKey.E:
+                    if (routes.Count > 0)
+                        RunRouteEditForm(routes[selectedIndex]);
+                    break;
+
+                case ConsoleKey.D:
+                    if (routes.Count > 0)
+                        RunRouteDeleteForm(routes[selectedIndex]);
+                    break;
+
+                case ConsoleKey.Spacebar:
+                    if (routes.Count > 0)
+                        ToggleRoute(routes[selectedIndex]);
+                    break;
+
+                case ConsoleKey.S:
+                    ToggleRouteMode();
+                    break;
+
+                case ConsoleKey.Escape:
+                    return;
+            }
+        }
+    }
+
+    private IReadOnlyList<DnsRoute> SafeListRoutes()
+    {
+        try
+        {
+            return _routeRepo.GetAll();
+        }
+        catch (Exception ex)
+        {
+            SetStatus(new OperationResult().Failed($"Could not read the route rules: {ex.Message}"));
+            return [];
+        }
+    }
+
+    private void ToggleRouteMode()
+    {
+        var result = Safe(() => _routeManager.IsProxyAlive() ? _routeManager.Stop() : _routeManager.Start());
+        SetStatus(result);
+        if (result.IsSucceeded)
+            AddHistory(result.Message.StartsWith("Route mode stopped") ? "Stopped route mode" : "Started route mode");
+        PromptAnyKey();
+    }
+
+    private void RunRouteAddForm()
+    {
+        AnsiConsole.Clear();
+        WriteFormHeader("-- Add route rule --");
+        AnsiConsole.MarkupLine(" [grey]patterns: example.com (domain + subdomains) · *.example.com (subdomains only) · * (fallback)[/]");
+
+        var pattern = Input.Ask("Pattern", validator: v =>
+        {
+            if (!DnsRouteEngine.IsValidPattern(v))
+                return "Enter a valid pattern: example.com | *.example.com | *.ir | *";
+
+            return _routeRepo.PatternExists(v!)
+                ? "That pattern already exists (patterns are unique)."
+                : null;
+        });
+        if (pattern is null) { Cancelled(); return; }
+
+        var presetId = PickPreset(null);
+        if (presetId is null) { return; }
+
+        var result = Safe(() =>
+        {
+            _routeRepo.Create(pattern.Trim(), presetId.Value);
+            return new OperationResult().Succeeded($"Route '{pattern.Trim()}' added");
+        });
+        SetStatus(result);
+        if (result.IsSucceeded)
+            AddHistory($"Added route '{pattern.Trim()}'");
+        PromptAnyKey();
+    }
+
+    private void RunRouteEditForm(DnsRoute route)
+    {
+        AnsiConsole.Clear();
+        WriteFormHeader($"-- Edit route '{route.Pattern}' --");
+
+        var pattern = Input.Ask("Pattern (Enter = keep)", defaultValue: route.Pattern, validator: v =>
+        {
+            if (!DnsRouteEngine.IsValidPattern(v))
+                return "Enter a valid pattern: example.com | *.example.com | *.ir | *";
+
+            return _routeRepo.PatternExists(v!, excludeId: route.Id)
+                ? "That pattern already exists (patterns are unique)."
+                : null;
+        });
+        if (pattern is null) { Cancelled(); return; }
+
+        var presetId = PickPreset(route.PresetId);
+        if (presetId is null) { return; }
+
+        var result = Safe(() => _routeRepo.Update(route.Id, pattern!.Trim(), presetId.Value, route.Enabled)
+            ? new OperationResult().Succeeded($"Route '{route.Pattern}' updated")
+            : new OperationResult().Failed("The rule no longer exists."));
+        SetStatus(result);
+        PromptAnyKey();
+    }
+
+    private void RunRouteDeleteForm(DnsRoute route)
+    {
+        AnsiConsole.Clear();
+        WriteFormHeader($"-- Delete route '{route.Pattern}' --");
+
+        var confirm = Input.Ask("Delete this route? (y/N)", validator: v =>
+            string.Equals(v?.Trim(), "y", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(v)
+                ? null
+                : "Enter y or press Enter to cancel.");
+        if (confirm is null || string.IsNullOrWhiteSpace(confirm)) { Cancelled(); return; }
+
+        var result = Safe(() => _routeRepo.Delete(route.Id)
+            ? new OperationResult().Succeeded($"Route '{route.Pattern}' deleted")
+            : new OperationResult().Failed("The rule no longer exists."));
+        SetStatus(result);
+        if (result.IsSucceeded)
+            AddHistory($"Deleted route '{route.Pattern}'");
+        PromptAnyKey();
+    }
+
+    private void ToggleRoute(DnsRoute route)
+    {
+        var result = Safe(() => _routeRepo.Update(route.Id, route.Pattern, route.PresetId, !route.Enabled)
+            ? new OperationResult().Succeeded($"Route '{route.Pattern}' {(!route.Enabled ? "enabled" : "disabled")}")
+            : new OperationResult().Failed("The rule no longer exists."));
+        SetStatus(result);
+    }
+
+    /// <summary>Arrow-key preset picker for route rules; null when cancelled.</summary>
+    private int? PickPreset(int? currentId)
+    {
+        var presets = _dnsApp.GetAll().ToList();
+        if (presets.Count == 0)
+        {
+            SetStatus(new OperationResult().Failed("No presets yet — create one first (C on the dashboard)."));
+            PromptAnyKey();
+            return null;
+        }
+
+        var index = Math.Max(0, presets.FindIndex(p => p.Id == currentId));
+        var accent = new Style(_settings.AccentColor.ToSpectreColor());
+
+        while (true)
+        {
+            AnsiConsole.Clear();
+            WriteFormHeader("-- Pick the preset for this rule --");
+
+            var table = new Table()
+                .Border(TableBorder.Rounded)
+                .BorderStyle(accent)
+                .Expand();
+            table.Title = new TableTitle(" [bold] Presets [/] [grey]↑↓ select · Enter pick · Esc cancel[/] ", accent);
+            table.AddColumn("[u] [/]");
+            table.AddColumn("[u]Name[/]");
+            table.AddColumn("[u]Servers[/]");
+
+            for (var i = 0; i < presets.Count; i++)
+            {
+                var selectedStyle = i == index
+                    ? new Style(_settings.HighlightForeground.ToSpectreColor(), _settings.HighlightBackground.ToSpectreColor())
+                    : Style.Plain;
+                table.AddRow(
+                    new Markup(i == index ? "[green]❯[/]" : " ", selectedStyle),
+                    new Markup(Markup.Escape(presets[i].Name ?? "?"), selectedStyle),
+                    new Markup(Markup.Escape(presets[i].DnsAddresses), selectedStyle));
+            }
+
+            AnsiConsole.Write(table);
+
+            var key = Console.ReadKey(intercept: true);
+            switch (key.Key)
+            {
+                case ConsoleKey.UpArrow:
+                    index = Math.Max(0, index - 1);
+                    break;
+
+                case ConsoleKey.DownArrow:
+                    index = Math.Min(presets.Count - 1, index + 1);
+                    break;
+
+                case ConsoleKey.Enter:
+                    return presets[index].Id;
+
+                case ConsoleKey.Escape:
+                    return null;
+            }
         }
     }
 

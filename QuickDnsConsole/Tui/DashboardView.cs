@@ -181,6 +181,7 @@ internal static class DashboardView
             "[b]T[/] test",
             "[b]B[/] bench",
             "[b]V[/] verify",
+            "[b]P[/] routes",
             "[b]S[/] setup cli",
             "[b]R[/] refresh",
             "[b]Q[/] quit");

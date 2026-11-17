@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using System.Runtime.InteropServices;
 using QD.Core.Application;
 using QD.Core.Application.Catalog;
@@ -6,6 +7,7 @@ using QD.Core.Application.Networking;
 using QD.Core.Cotracts.DnsObjContracts;
 using QD.Core.Helper;
 using QD.Core.Infrastructure.SQLite;
+using QuickDNSConsole.RouteProxy;
 using QuickDNSConsole.Tui;
 
 namespace QuickDNSConsole;
@@ -15,11 +17,11 @@ internal static class Program
     public static string VersionText =>
         typeof(Program).Assembly.GetName().Version!.ToString(3);
 
-    private static int Main(string[] args)
+    private static async Task<int> Main(string[] args)
     {
         // Single-option CLI: the first argument (if any) decides the mode.
         if (args.Length > 0)
-            return HandleOption(args, 0);
+            return await HandleOption(args, 0);
 
         if (!Console.IsOutputRedirected)
         {
@@ -41,11 +43,17 @@ internal static class Program
 
             AppPaths.MigrateLegacyFiles();
             var settings = AppSettingsStore.Load();
-            var (dnsApp, adapters, startupWarning) = CreateApplication();
+            var (dnsApp, adapters, startupWarning, routeManager) = CreateApplication();
+
+            // Safety rail: a previous route-mode activation whose host died while the
+            // adapters still point at 127.0.0.1 would leave DNS broken — restore it.
+            var healWarning = routeManager.AutoHealOrphanedActivation();
+            if (healWarning is not null)
+                startupWarning = startupWarning is null ? healWarning : $"{startupWarning} {healWarning}";
 
             stopwatch.Stop();
 
-            new DnsTui(dnsApp, adapters, settings, stopwatch.Elapsed, new DnsProbeService(), DnsCatalog.Embedded, startupWarning).Run();
+            new DnsTui(dnsApp, adapters, settings, stopwatch.Elapsed, new DnsProbeService(), DnsCatalog.Embedded, new DnsRouteRepository(new DnsDatabase(AppPaths.DatabaseFile)), routeManager, startupWarning).Run();
             return 0;
         }
         catch (PlatformNotSupportedException ex)
@@ -59,8 +67,9 @@ internal static class Program
     }
 
     /// <summary>Handles the single CLI option (no interactive mode).</summary>
-    private static int HandleOption(string[] args, int index)
+    private static async Task<int> HandleOption(string[] args, int index)
     {
+
         switch (args[index].ToLowerInvariant())
         {
             case "--version" or "-v":
@@ -108,6 +117,22 @@ internal static class Program
                 }
                 return RunStoreOperation(app => app.ImportPresets(args[index + 1]));
 
+            case "--route-start":
+                return RunRouteOperation(manager => manager.Start());
+
+            case "--route-stop":
+                return RunRouteOperation(manager => manager.Stop());
+
+            case "--route-status":
+                {
+                    var (_, _, _, manager) = CreateApplication();
+                    Console.WriteLine(manager.DescribeStatus());
+                    return 0;
+                }
+
+            case "--route-host":
+                return await RouteHostRunner.RunAsync();
+
             default:
                 Console.Error.WriteLine($"Unknown option '{args[index]}'.");
                 PrintHelp();
@@ -120,7 +145,7 @@ internal static class Program
     /// startup: a damaged store gets quarantined and recreated, and the silent
     /// auto-backup (written on every clean run) is restored into it automatically.
     /// </summary>
-    private static (IDnsObjApplication App, INetworkAdapterService Adapters, string? Warning) CreateApplication()
+    private static (IDnsObjApplication App, INetworkAdapterService Adapters, string? Warning, RouteModeManager Routes) CreateApplication()
     {
         var database = new DnsDatabase(AppPaths.DatabaseFile);
         string? warning = null;
@@ -139,6 +164,7 @@ internal static class Program
         var repository = new DnsObjRepository(database);
         var adapters = NetworkAdapterServiceFactory.Create();
         IDnsObjApplication app = new DnsObjApplication(repository, adapters);
+        var routeManager = new RouteModeManager(new DnsRouteRepository(database), app, adapters);
 
         if (quarantined)
         {
@@ -165,7 +191,7 @@ internal static class Program
             app.WriteAutoBackup(AppPaths.AutoBackupFile);
         }
 
-        return (app, adapters, warning);
+        return (app, adapters, warning, routeManager);
     }
 
     /// <summary>
@@ -177,7 +203,7 @@ internal static class Program
     {
         try
         {
-            var (app, _, _) = CreateApplication();
+            var (app, _, _, _) = CreateApplication();
             var result = operation(app);
             Console.WriteLine(result.Message);
             if (result.IsSucceeded && revealOnSuccess is not null && !Console.IsOutputRedirected)
@@ -205,12 +231,30 @@ internal static class Program
         }
     }
 
+    /// <summary>Runs a route-mode management operation (start/stop).</summary>
+    private static int RunRouteOperation(Func<RouteModeManager, OperationResult> operation)
+    {
+        try
+        {
+            var (_, _, _, manager) = CreateApplication();
+            var result = operation(manager);
+            Console.WriteLine(result.Message);
+            return result.IsSucceeded ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            return Fail(ex);
+        }
+    }
+
+    // (the route host runner lives in RouteProxy/RouteHostRunner.cs)
+
     /// <summary>--test: ping, DNS query speed and reachability for a preset name or a raw IP.</summary>
     private static int RunTestOperation(string target)
     {
         try
         {
-            var (app, _, _) = CreateApplication();
+            var (app, _, _, _) = CreateApplication();
             IDnsProbeService probe = new DnsProbeService();
 
             DnsObjViewModel? preset = null;
@@ -292,6 +336,9 @@ internal static class Program
         Console.WriteLine("  --test <name|ip>  Ping, DNS query speed and reachability for a preset or server");
         Console.WriteLine("  --setup        Make 'quickdns' callable from any terminal (per-user install, no admin)");
         Console.WriteLine("  --uninstall    Remove that per-user CLI installation");
+        Console.WriteLine("  --route-start  Start route-based DNS: local proxy on 127.0.0.1:53 + per-domain rules");
+        Console.WriteLine("  --route-stop   Stop route mode and restore automatic (DHCP) DNS");
+        Console.WriteLine("  --route-status Show route mode status (host, rules, adapters)");
         Console.WriteLine("  --version      Print version and exit");
         Console.WriteLine("  --help         Show this help");
         Console.WriteLine();
@@ -337,6 +384,18 @@ internal static class Program
         catch (Exception ex)
         {
             Console.WriteLine($"Preset store: ERROR — {ex.Message}");
+        }
+
+        try
+        {
+            var db = new DnsDatabase(AppPaths.DatabaseFile);
+            var app = new DnsObjApplication(new DnsObjRepository(db), service);
+            var manager = new RouteModeManager(new DnsRouteRepository(db), app, service);
+            Console.WriteLine(manager.DescribeStatus().Replace(Environment.NewLine, " · "));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Route mode: ERROR — {ex.Message}");
         }
 
         Console.WriteLine();
