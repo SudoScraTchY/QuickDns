@@ -327,3 +327,34 @@ jobs:
           make_latest: "true"
           files: dist/*
           fail_on_unmatched_files: true
+
+      # GitHub's "Latest" flag is what powers the permanent
+      # /releases/latest/download/<asset> direct links (README + website). The
+      # release action's make_latest input is not applied reliably on the update
+      # path (release already exists), so PATCH it explicitly. A prerelease CAN
+      # be marked Latest; the newest marked release always wins.
+      - name: Mark release as Latest (keeps direct links alive)
+        if: >-
+          startsWith(github.ref, 'refs/tags/v') ||
+          (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="latest"
+          fi
+          release_id=$(curl -sf -H "Authorization: Bearer ${{ github.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" | jq -r '.id')
+          if [ -n "$release_id" ] && [ "$release_id" != "null" ]; then
+            curl -sf -X PATCH \
+              -H "Authorization: Bearer ${{ github.token }}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/json" \
+              -d '{"make_latest":"true"}' \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/$release_id" > /dev/null
+            echo "Release $release_id (tag $TAG) marked as Latest."
+          else
+            echo "::warning::No release found for tag $TAG; nothing marked as Latest."
+          fi
