@@ -244,13 +244,23 @@ jobs:
       - name: Route mode round trip (real proxy + resolution)
         shell: bash
         run: |
-          "$EXE" --route-start
+          EXE="publish/${{ matrix.artifact }}/QuickDNSConsole"
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then EXE="publish/${{ matrix.artifact }}/QuickDNSConsole.exe"; fi
+          # Route mode needs elevation: sudo on Linux runners (passwordless), admin is
+          # default on Windows runners.
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            "$EXE" --route-start
             powershell -NoProfile -Command "Resolve-DnsName example.com -Server 127.0.0.2 -Type A | Out-String"
+            "$EXE" --route-stop
           else
-            dig @127.0.0.2 example.com +time=3 +tries=1 +short
+            sudo "$EXE" --route-start
+            if command -v dig >/dev/null 2>&1; then
+              dig @127.0.0.2 example.com +time=3 +tries=1 +short
+            else
+              nslookup example.com 127.0.0.2
+            fi
+            sudo "$EXE" --route-stop
           fi
-          "$EXE" --route-stop
 
       - name: Package (zip + SHA256)
         shell: bash
