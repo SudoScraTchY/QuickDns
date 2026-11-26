@@ -7,8 +7,8 @@ using QD.Core.Application.Routing;
 namespace QuickDNSConsole.RouteProxy;
 
 /// <summary>
-/// The route-based DNS proxy: a small forwarding resolver bound to 127.0.0.1:53 and
-/// [::1]:53. The system's adapters point their DNS at the loopback during route mode;
+/// The route-based DNS proxy: a small forwarding resolver bound to a free loopback address
+/// on port 53 (127.0.0.2 by default). The system's adapters point their DNS at it during route mode;
 /// every query is matched against the route rules and relayed to the matching upstream.
 ///
 /// Design rules (verified against RFC 7766 / RFC 6891 and real-world forwarders):

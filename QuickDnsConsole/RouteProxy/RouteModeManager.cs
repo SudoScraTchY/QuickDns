@@ -241,7 +241,7 @@ public sealed class RouteModeManager(
 
     /// <summary>
     /// Called at startup: when a previous activation was orphaned (adapters still point at
-    /// 127.0.0.1 while the host is dead) this restores automatic DNS and returns a warning;
+    /// the loopback proxy while the host is dead) this restores automatic DNS and returns a warning;
     /// otherwise null. Gated on our own state file so third-party loopback DNS tools
     /// (AdGuard, Umbrella…) are never touched.
     /// </summary>
@@ -260,7 +260,7 @@ public sealed class RouteModeManager(
             SafeApply(() => _adapters.ClearDns(adapter));
 
         CleanupFiles();
-        return "The route-mode host was no longer running while adapters still pointed at 127.0.0.1 — DNS was restored to automatic.";
+        return $"The route-mode host was no longer running while adapters still pointed at {bindIp} — DNS was restored to automatic.";
     }
 
     // ---- helpers -------------------------------------------------------------

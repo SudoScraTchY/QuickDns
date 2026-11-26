@@ -46,7 +46,7 @@ internal static class Program
             var (dnsApp, adapters, startupWarning, routeManager) = CreateApplication();
 
             // Safety rail: a previous route-mode activation whose host died while the
-            // adapters still point at 127.0.0.1 would leave DNS broken — restore it.
+            // adapters still point at the loopback proxy would leave DNS broken — restore it.
             var healWarning = routeManager.AutoHealOrphanedActivation();
             if (healWarning is not null)
                 startupWarning = startupWarning is null ? healWarning : $"{startupWarning} {healWarning}";
@@ -348,7 +348,7 @@ internal static class Program
         Console.WriteLine("  --test <name|ip>  Ping, DNS query speed and reachability for a preset or server");
         Console.WriteLine("  --setup        Make 'quickdns' callable from any terminal (per-user install, no admin)");
         Console.WriteLine("  --uninstall    Remove that per-user CLI installation");
-        Console.WriteLine("  --route-start  Start route-based DNS: local proxy on 127.0.0.1:53 + per-domain rules");
+        Console.WriteLine("  --route-start  Start route-based DNS: local proxy on a free loopback address (127.0.0.2 by default) + per-domain rules");
         Console.WriteLine("  --route-stop   Stop route mode and restore automatic (DHCP) DNS");
         Console.WriteLine("  --route-status Show route mode status (host, rules, adapters)");
         Console.WriteLine("  --version      Print version and exit");
