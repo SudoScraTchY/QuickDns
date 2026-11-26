@@ -111,9 +111,24 @@ jobs:
       - name: Route mode round trip (real proxy + resolution)
         shell: pwsh
         run: |
-          .\publish\aot\QuickDNSConsole.exe --route-start
-          Resolve-DnsName example.com -Server 127.0.0.2 -Type A | Out-String
-          .\publish\aot\QuickDNSConsole.exe --route-stop
+          $PSNativeCommandUseErrorActionPreference = $false
+          $exe = (Resolve-Path .\publish\aot\QuickDNSConsole.exe).Path
+          $log = Join-Path $env:APPDATA 'QuickDns\routes.log'
+          function Show-RouteDiagnostics {
+            & $exe --route-status | Out-String
+            if (Test-Path $log) { Get-Content $log -Tail 30 }
+          }
+          & $exe --route-start
+          if ($LASTEXITCODE -ne 0) { $code = $LASTEXITCODE; Show-RouteDiagnostics; exit $code }
+          try {
+            Resolve-DnsName example.com -Server 127.0.0.2 -Type A -ErrorAction Stop | Out-String
+          } catch {
+            Show-RouteDiagnostics
+            & $exe --route-stop
+            exit 1
+          }
+          & $exe --route-stop
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Package (zip + SHA256)
         shell: bash
@@ -242,25 +257,41 @@ jobs:
           "$EXE" --uninstall
 
       - name: Route mode round trip (real proxy + resolution)
+        if: matrix.smoke == true
         shell: bash
         run: |
           EXE="publish/${{ matrix.artifact }}/QuickDNSConsole"
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then EXE="publish/${{ matrix.artifact }}/QuickDNSConsole.exe"; fi
-          # Route mode needs elevation: sudo on Linux runners (passwordless), admin is
-          # default on Windows runners.
+          PRIV=""
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            "$EXE" --route-start
-            powershell -NoProfile -Command "Resolve-DnsName example.com -Server 127.0.0.2 -Type A | Out-String"
-            "$EXE" --route-stop
+            EXE="publish/${{ matrix.artifact }}/QuickDNSConsole.exe"
           else
-            sudo "$EXE" --route-start
-            if command -v dig >/dev/null 2>&1; then
-              dig @127.0.0.2 example.com +time=3 +tries=1 +short
-            else
-              nslookup example.com 127.0.0.2
-            fi
-            sudo "$EXE" --route-stop
+            # Route mode needs elevation: passwordless sudo on GitHub's Linux runners
+            # (Windows runners already run elevated).
+            PRIV="sudo"
           fi
+          diagnose() {
+            echo "::group::Route mode diagnostics"
+            $PRIV "$EXE" --route-status || true
+            for f in /root/.config/QuickDns/routes.log "$HOME/.config/QuickDns/routes.log" "$APPDATA/QuickDns/routes.log"; do
+              if $PRIV test -f "$f"; then
+                echo "--- $f"
+                $PRIV tail -n 30 "$f" || true
+              fi
+            done
+            echo "::endgroup::"
+          }
+          # Whatever happens below, never leave the runner's DNS pointing at a dead proxy.
+          trap '$PRIV "$EXE" --route-stop >/dev/null 2>&1 || true' EXIT
+          $PRIV "$EXE" --route-start || { diagnose; exit 1; }
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            powershell -NoProfile -Command '$r = Resolve-DnsName example.com -Server 127.0.0.2 -Type A -ErrorAction Stop; $r | Out-String' || { diagnose; exit 1; }
+          elif command -v dig >/dev/null 2>&1; then
+            answer="$(dig @127.0.0.2 example.com +time=3 +tries=1 +short)" && [ -n "$answer" ] || { diagnose; exit 1; }
+            echo "example.com via the route proxy: $answer"
+          else
+            nslookup example.com 127.0.0.2 || { diagnose; exit 1; }
+          fi
+          $PRIV "$EXE" --route-stop
 
       - name: Package (zip + SHA256)
         shell: bash

@@ -56,7 +56,7 @@ public static class CliIntegration
     /// layouts, the managed dll + its *.deps.json / *.runtimeconfig.json.
     /// </summary>
     private static readonly string[] CompanionPatterns =
-        ["*.dll", "*.deps.json", "*.runtimeconfig.json"];
+        ["*.dll", "*.so", "*.dylib", "*.deps.json", "*.runtimeconfig.json"];
 
     /// <summary>Companion files next to the running executable (never the exe itself).</summary>
     private static IReadOnlyList<string> GetCompanionFiles()
@@ -129,6 +129,19 @@ public static class CliIntegration
                 copiedCompanions++;
             }
 
+            // RID-specific framework-dependent layouts may keep their native libraries in a
+            // runtimes/<rid>/native/ tree (libe_sqlite3.so on Linux) instead of next to the
+            // exe: bring the whole tree along, or the installed copy cannot open its store.
+            var sourceDirectory = Path.GetDirectoryName(Path.GetFullPath(source));
+            if (!string.IsNullOrEmpty(sourceDirectory))
+            {
+                var runtimeTree = Path.Combine(sourceDirectory, RuntimeTreeName);
+                var installedTree = Path.Combine(InstallDirectory, RuntimeTreeName);
+                var sameName = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                if (Directory.Exists(runtimeTree) && !string.Equals(Path.GetFullPath(runtimeTree), Path.GetFullPath(installedTree), sameName))
+                    copiedCompanions += CopyTree(runtimeTree, installedTree);
+            }
+
             string pathMessage;
             if (OperatingSystem.IsWindows())
             {
@@ -145,7 +158,7 @@ public static class CliIntegration
                 pathMessage = hint;
             }
 
-            var companionNote = companions.Count > 0
+            var companionNote = copiedCompanions > 0
                 ? $" (+{copiedCompanions} runtime file(s))"
                 : string.Empty;
             return new OperationResult().Succeeded(
@@ -199,6 +212,15 @@ public static class CliIntegration
                     catch { /* best-effort; a locked file disappears next time */ }
                 }
             }
+
+            // The runtimes/ tree (native libraries of RID-specific layouts) goes too.
+            try
+            {
+                var runtimeTree = Path.Combine(InstallDirectory, RuntimeTreeName);
+                if (Directory.Exists(runtimeTree))
+                    Directory.Delete(runtimeTree, recursive: true);
+            }
+            catch { /* best-effort; a locked file disappears next time */ }
 
             try
             {
@@ -349,6 +371,25 @@ public static class CliIntegration
 
     private static IReadOnlyList<string> GetPathEntries() =>
         SplitPathEntries(Environment.GetEnvironmentVariable("PATH"));
+
+    /// <summary>Native-library tree of RID-specific framework-dependent layouts (runtimes/rid/native).</summary>
+    private const string RuntimeTreeName = "runtimes";
+
+    /// <summary>Copies a directory tree recursively (overwriting); returns the number of files copied.</summary>
+    private static int CopyTree(string source, string target)
+    {
+        Directory.CreateDirectory(target);
+        var copied = 0;
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var destination = Path.Combine(target, Path.GetRelativePath(source, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            CopyWithRetry(file, destination);
+            copied++;
+        }
+
+        return copied;
+    }
 
     private static void CopyWithRetry(string source, string target)
     {

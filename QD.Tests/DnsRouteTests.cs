@@ -158,6 +158,30 @@ public sealed class DnsRouteRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void FreshStore_SeedsPresetsThenFallbackRoute_InStartupOrder()
+    {
+        var (routes, presets) = OpenStores();
+
+        // Mirrors CreateApplication on a first run: the presets are seeded first, then the
+        // default fallback route (it needs a preset to point at). The reverse order leaves
+        // a fresh install with no route rule, and --route-start refuses.
+        PresetSeeder.SeedIfEmpty(presets);
+        PresetSeeder.SeedFallbackRouteIfEmpty(routes, presets);
+
+        Assert.Equal(5, presets.Count());
+        var rule = routes.GetAll().Single();
+        Assert.Equal("*", rule.Pattern);
+        Assert.True(rule.Enabled);
+        Assert.Equal("Cloudflare", presets.FindById(rule.PresetId)?.Name);
+
+        // A second start must not duplicate anything.
+        PresetSeeder.SeedIfEmpty(presets);
+        PresetSeeder.SeedFallbackRouteIfEmpty(routes, presets);
+        Assert.Equal(5, presets.Count());
+        Assert.Equal(1, routes.Count());
+    }
+
+    [Fact]
     public void SeedFallbackRouteIfEmpty_CreatesStarRule_Once()
     {
         var (routes, presets) = OpenStores();

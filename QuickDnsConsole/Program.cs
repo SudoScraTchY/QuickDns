@@ -161,12 +161,15 @@ internal static class Program
             warning = $"{ApplicationMessages.StoreOpenFailed} ({ex.Message})";
         }
 
+        // True unless the store itself failed to open (a quarantine still leaves a usable,
+        // freshly created store behind, so it counts as usable).
+        var storeUsable = warning is null;
+
         var repository = new DnsObjRepository(database);
         var adapters = NetworkAdapterServiceFactory.Create();
         IDnsObjApplication app = new DnsObjApplication(repository, adapters);
         var routeRepository = new DnsRouteRepository(database);
         var routeManager = new RouteModeManager(routeRepository, app, adapters);
-        PresetSeeder.SeedFallbackRouteIfEmpty(routeRepository, repository);
 
         if (quarantined)
         {
@@ -192,6 +195,13 @@ internal static class Program
             // update or a corrupted store can never wipe the user's DNS list.
             app.WriteAutoBackup(AppPaths.AutoBackupFile);
         }
+
+        // AFTER preset seeding: the default fallback route points at a preset, so on a
+        // truly fresh store this must run once the default presets exist; otherwise
+        // --route-start refuses on a fresh install with no route rules. Skipped when the store
+        // failed to open: that path must surface the startup warning, never throw.
+        if (storeUsable)
+            PresetSeeder.SeedFallbackRouteIfEmpty(routeRepository, repository);
 
         return (app, adapters, warning, routeManager);
     }
